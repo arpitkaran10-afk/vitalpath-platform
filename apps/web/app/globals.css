@@ -1,24 +1,20 @@
+@import "tailwindcss";
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
+  --color-sage: #6B8F71;
+  --color-sage-light: #A8C5AC;
+  --color-sage-dark: #4A6E50;
+  --color-warm: #F5ECD7;
+  --color-warm-mid: #EDD9B0;
+  --color-terracotta: #C8604A;
+  --color-terracotta-light: #E8907E;
+  --color-gold: #D4A843;
+  --color-gold-light: #F0C96A;
+  --color-ink: #1C2B1E;
+  --color-muted: #6B7B6E;
+  --color-surface: #FAFAF8;
+  --color-card: #FFFFFF;
+  --color-border: #E8EDE9;
 }
 
 * {
@@ -27,24 +23,165 @@ body {
   margin: 0;
 }
 
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 a {
   color: inherit;
   text-decoration: none;
 }
 
-.imgDark {
-  display: none;
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-sage-light);
+  border-radius: 3px;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+:focus:not(:focus-visible) {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--color-sage);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
-  .imgLight {
-    display: none;
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Desktop layout utilities (1280px+) ── */
+@media (min-width: 1280px) {
+  .dt-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 40px;
   }
-  .imgDark {
-    display: unset;
+  .dt-hero {
+    height: 420px !important;
+  }
+  .dt-hero-content {
+    padding: 40px 56px 44px !important;
+  }
+  .dt-2col {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .dt-col-65-35 {
+    display: grid !important;
+    grid-template-columns: 65fr 35fr;
+    gap: 28px;
+  }
+  .dt-col-60-40 {
+    display: grid !important;
+    grid-template-columns: 60fr 40fr;
+    gap: 28px;
+  }
+  .dt-section {
+    padding: 40px 40px 0 !important;
+  }
+  .dt-section-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .dt-only {
+    display: block !important;
+  }
+  .dt-flex-only {
+    display: flex !important;
+  }
+  .dt-grid-3 {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .dt-card-row {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .dt-metric-row {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    overflow: visible !important;
+  }
+  .dt-metric-row > * {
+    min-width: unset !important;
+    width: unset !important;
+    flex: unset !important;
+  }
+  .dt-h1 {
+    font-size: 40px !important;
+    letter-spacing: -0.035em !important;
+  }
+  .dt-h2 {
+    font-size: 26px !important;
+  }
+  .dt-workflow-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .dt-story-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    overflow: visible !important;
+  }
+  .dt-story-grid > * {
+    width: unset !important;
+    flex-shrink: unset !important;
+  }
+  .dt-article-row {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    overflow: visible !important;
+  }
+  .dt-article-row > * {
+    width: unset !important;
+  }
+  .dt-focus-carousel {
+    display: grid !important;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    overflow: visible !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  .dt-focus-carousel > * {
+    width: unset !important;
+    flex-shrink: unset !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  .dt-container {
+    max-width: 1400px;
+    padding: 0 48px;
+  }
+  .dt-hero {
+    height: 480px !important;
+  }
+  .dt-section {
+    padding: 48px 48px 0 !important;
   }
 }
