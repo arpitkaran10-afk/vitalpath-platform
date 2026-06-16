@@ -3452,7 +3452,7 @@ function Month2Content() {
         </div>
 
         {/* ── 9. MONTH 3 PREVIEW ── */}
-        <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.10)' }}>
+        <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.10)', marginTop: '32px' }}>
           <img
             src="https://images.unsplash.com/photo-1541480601022-2308c0f02487?w=800&q=80"
             alt="Month 3 — Metabolic Correction"
@@ -4099,7 +4099,7 @@ function LockedMonthContent({ monthNum }: { monthNum: number }) {
       <BiomarkerProgressShowcase />
 
       {/* ── CTA — full colour, outside grayscale filter ── */}
-      <div style={{ padding: '0 24px 40px' }}>
+      <div style={{ padding: '0 24px 40px', marginTop: '32px' }}>
         <div style={{ background: 'linear-gradient(155deg, #1C2B1E 0%, #3A5C3E 100%)', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 20px rgba(28,43,30,0.2)' }}>
           <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: '6px' }}>Keep Building Momentum</p>
           <p style={{ fontSize: '20px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1.2, marginBottom: '8px' }}>Complete Month 2 to unlock this chapter.</p>
@@ -4894,7 +4894,7 @@ function TransformationJourney() {
               onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.transform = 'translateY(0)'; b.style.boxShadow = '0 4px 16px rgba(107,143,113,0.45)'; }}
             >
               <Camera size={14} strokeWidth={2.5} />
-              Capture Day 1
+              Capture Today's Win
             </button>
             <button
               style={{
@@ -4972,83 +4972,12 @@ function TransformationJourney() {
         </div>
       </div>
 
-      {/* ── SECTION 3: Meal Planning ── */}
-      <div style={{ padding: '16px 24px 0' }}>
-        <div style={{
-          borderRadius: '24px', overflow: 'hidden',
-          background: 'linear-gradient(150deg, #1C2B1E 0%, #2D4A30 100%)',
-          boxShadow: '0 4px 28px rgba(28,43,30,0.22)',
-          padding: '22px 22px 20px',
-          position: 'relative',
-        }}>
-          {/* Soft orb */}
-          <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(107,143,113,0.18)', pointerEvents: 'none' }} />
-          <div style={{ position: 'relative' }}>
-            <p style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(168,197,172,0.80)', textTransform: 'uppercase' as const, letterSpacing: '0.11em', marginBottom: '4px' }}>
-              Your Personalised Nutrition Plan
-            </p>
-            <p style={{ fontSize: '17px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1.25, marginBottom: '12px' }}>
-              Eat well.<br />Feel better.
-            </p>
-            {/* Coach card */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '12px',
-              background: 'rgba(255,255,255,0.08)', borderRadius: '14px', padding: '12px 14px',
-              border: '1px solid rgba(255,255,255,0.10)',
-              marginBottom: '16px',
-            }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '2px solid rgba(168,197,172,0.40)' }}>
-                <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=80&q=80" alt="Dr. Ananya Rao" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-              <div>
-                <p style={{ fontSize: '12px', fontWeight: 700, color: '#fff', marginBottom: '1px' }}>Dr. Ananya Rao</p>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.50)' }}>Your TGHC Coach · Available now</p>
-              </div>
-              <div style={{ marginLeft: 'auto', width: '8px', height: '8px', borderRadius: '50%', background: '#7FFFA0', flexShrink: 0 }} />
-            </div>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.58)', lineHeight: 1.6, marginBottom: '18px' }}>
-              Work with your TGHC coach to build a nutrition plan tailored to your goals, health profile and lifestyle.
-            </p>
-            <button style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '12px 22px',
-              background: 'linear-gradient(135deg, var(--color-sage) 0%, var(--color-sage-dark) 100%)',
-              color: '#fff', border: 'none', borderRadius: '22px',
-              fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-              boxShadow: '0 4px 16px rgba(107,143,113,0.40)',
-              transition: 'transform 0.15s ease',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; }}
-            >
-              <UtensilsCrossed size={14} strokeWidth={2.5} />
-              Request My Meal Plan
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* ── SECTION 4: Transformation Timeline ── */}
       <div style={{ padding: '20px 24px 0' }}>
         <div style={{ background: '#fff', borderRadius: '24px', border: '1px solid var(--color-border)', boxShadow: '0 2px 16px rgba(0,0,0,0.06)', padding: '20px 20px 18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-            <div>
-              <p style={{ fontSize: '9px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '3px' }}>Visual Story</p>
-              <p style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>Transformation Timeline</p>
-            </div>
-            <button
-              onClick={() => fileRef.current?.click()}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: '5px',
-                padding: '8px 14px',
-                background: 'rgba(107,143,113,0.09)', color: 'var(--color-sage)',
-                border: '1px solid rgba(107,143,113,0.22)', borderRadius: '20px',
-                fontSize: '11px', fontWeight: 700, cursor: 'pointer',
-              }}
-            >
-              <Camera size={12} strokeWidth={2.5} />
-              Add Photo
-            </button>
+          <div style={{ marginBottom: '18px' }}>
+            <p style={{ fontSize: '9px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '3px' }}>Visual Story</p>
+            <p style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>Transformation Timeline</p>
           </div>
 
           {/* Timeline row */}
@@ -5120,6 +5049,25 @@ function TransformationJourney() {
           <p style={{ fontSize: '11px', color: 'var(--color-muted)', fontStyle: 'italic', lineHeight: 1.6, marginTop: '14px' }}>
             The changes may feel small today, but they become powerful when you look back.
           </p>
+          <div style={{ marginTop: '16px' }}>
+            <button
+              onClick={() => fileRef.current?.click()}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '7px',
+                padding: '10px 20px',
+                background: 'var(--color-sage)', color: '#fff',
+                border: 'none', borderRadius: '999px',
+                fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(107,143,113,0.35)',
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              }}
+              onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.transform = 'translateY(-1px)'; b.style.boxShadow = '0 6px 20px rgba(107,143,113,0.50)'; }}
+              onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.transform = 'translateY(0)'; b.style.boxShadow = '0 4px 16px rgba(107,143,113,0.35)'; }}
+            >
+              <Camera size={14} strokeWidth={2.5} />
+              Capture Today's Win
+            </button>
+          </div>
         </div>
       </div>
 
@@ -5461,6 +5409,11 @@ function OverviewContent() {
         .ov-mobile-only { display: flex; flex-direction: column; gap: 0; }
         .ov-desktop-only { display: none; }
 
+        /* Mobile-only spacing between JourneyIndicator and TransformationJourney */
+        @media (max-width: 1023px) {
+          .ov-s2-journey { padding-bottom: 28px !important; }
+        }
+
         /* Desktop: hide mobile layout, show desktop */
         @media (min-width: 1024px) {
           .ov-mobile-only { display: none !important; }
@@ -5607,7 +5560,7 @@ function OverviewContent() {
       {/* S1: Hero — cinematic full-width split */}
       <div className="ov-hero" style={{
         position: 'relative',
-        height: '260px',
+        height: '290px',
         overflow: 'hidden',
       }}>
         <img
@@ -5646,6 +5599,60 @@ function OverviewContent() {
             <p className="ov-hero-subtitle" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.55, margin: 0, maxWidth: '320px' }}>
               {daySubtitle}
             </p>
+            {/* Health Goals row */}
+            <div style={{ marginTop: '10px', marginBottom: '2px' }}>
+              <p style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Your Health Goal</p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {/* Goal 1: Reverse Diabetes */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.15, ease: 'easeOut' }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '7px',
+                    background: 'rgba(255,255,255,0.08)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: '999px',
+                    padding: '5px 12px 5px 6px',
+                  }}
+                >
+                  <motion.div
+                    animate={{ y: [0, -2, 0] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.6 }}
+                    style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(200,96,74,0.22)', border: '1px solid rgba(200,96,74,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', flexShrink: 0 }}
+                  >🔥</motion.div>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.92)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>Reverse Diabetes</span>
+                </motion.div>
+                {/* Goal 2: Lose Weight */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.25, ease: 'easeOut' }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '7px',
+                    background: 'rgba(255,255,255,0.08)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: '999px',
+                    padding: '5px 12px 5px 6px',
+                  }}
+                >
+                  <motion.div
+                    animate={{ y: [0, -2, 0] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1.4 }}
+                    style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(107,143,113,0.22)', border: '1px solid rgba(107,143,113,0.32)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', flexShrink: 0 }}
+                  >⚖️</motion.div>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.92)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>Lose Weight</span>
+                </motion.div>
+              </div>
+            </div>
             {/* Inline month progress bar */}
             <div style={{ marginTop: '6px' }}>
               <div style={{ height: '3px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', overflow: 'hidden', maxWidth: '200px' }}>
