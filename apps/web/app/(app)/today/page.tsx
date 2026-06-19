@@ -1,11 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef, Suspense } from 'react';
+import { useHPlusStore, logActivity } from '../../../lib/hplus-store';
+import type { ActivityCategory, HPlusEngineState, CategoryProgress } from '../../../lib/hplus-store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
+import NutritionBlueprintWizard, { type BlueprintData, generateMeals, generatePlanTitle } from '../components/NutritionBlueprintWizard';
 import {
   Lock,
+  LockOpen,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Plus,
   Heart,
@@ -16,6 +21,7 @@ import {
   Footprints,
   Brain,
   FlaskConical,
+  Bell,
   Target,
   TrendingUp,
   Zap,
@@ -161,11 +167,13 @@ function WorkflowCard({
   icon: Icon,
   title,
   description,
+  badge,
 }: {
   imgSrc: string;
   icon: React.ElementType;
   title: string;
   description: string;
+  badge?: string;
 }) {
   return (
     <div style={{
@@ -187,6 +195,15 @@ function WorkflowCard({
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.35) 100%)' }} />
+        {badge && (
+          <div style={{
+            position: 'absolute', top: '8px', left: '8px',
+            background: 'rgba(255,255,255,0.92)',
+            borderRadius: '20px', padding: '3px 9px',
+          }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-ink)', letterSpacing: '0.01em' }}>{badge}</span>
+          </div>
+        )}
       </div>
       <div style={{ padding: '14px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -1049,7 +1066,18 @@ const NS_MODE_TABS: { id: NutritionMode; label: string }[] = [
 
 function NutritionStrategyCard({ variant = 'default' }: { variant?: 'default' | 'month' }) {
   const [mode, setMode] = useState<NutritionMode>('assigned');
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [blueprint, setBlueprint] = useState<BlueprintData | null>(null);
   const compact = variant === 'month';
+
+  const handleBlueprintComplete = (data: BlueprintData) => {
+    setBlueprint(data);
+    setWizardOpen(false);
+    setMode('assigned');
+  };
+
+  const activeMeals = blueprint ? generateMeals(blueprint) : NS_MEALS;
+  const planTitle = blueprint ? generatePlanTitle(blueprint) : 'Week 3 Nutrition Plan';
 
   // Content-zone height: tall enough for Assigned (meal rail + progress + CTAs),
   // so Coach and DIY sit inside the same fixed space.
@@ -1243,7 +1271,7 @@ function NutritionStrategyCard({ variant = 'default' }: { variant?: 'default' | 
             </p>
           </div>
           <div>
-            <button className="ns-cta-p" style={{ padding: ctapy, fontSize: ctasz, background: 'linear-gradient(135deg, #6B8F71 0%, #4A6E50 100%)', color: '#fff', boxShadow: '0 3px 12px rgba(107,143,113,0.26)', marginBottom: '6px' }}>
+            <button className="ns-cta-p" onClick={() => setWizardOpen(true)} style={{ padding: ctapy, fontSize: ctasz, background: 'linear-gradient(135deg, #6B8F71 0%, #4A6E50 100%)', color: '#fff', boxShadow: '0 3px 12px rgba(107,143,113,0.26)', marginBottom: '6px' }}>
               <UtensilsCrossed size={12} strokeWidth={2.5} />
               Create My Own Meal Plan
             </button>
@@ -1267,14 +1295,21 @@ function NutritionStrategyCard({ variant = 'default' }: { variant?: 'default' | 
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <p style={{ fontSize: '8px', fontWeight: 700, color: 'rgba(168,197,172,0.52)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '3px' }}>Active Meal Plan</p>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-              <h3 style={{ fontSize: compact ? '15px' : '17px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.18 }}>Week 3 Nutrition Plan</h3>
+              <div>
+                <h3 style={{ fontSize: compact ? '15px' : '17px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.18 }}>{planTitle}</h3>
+                {blueprint && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '2px', padding: '2px 7px', borderRadius: '20px', background: 'rgba(107,143,113,0.18)', border: '1px solid rgba(107,143,113,0.28)', fontSize: '8px', fontWeight: 700, color: '#A8C5AC', letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>
+                    Generated from your Nutrition Blueprint
+                  </span>
+                )}
+              </div>
               <span style={{ fontSize: '10px', fontWeight: 700, color: '#A8C5AC', flexShrink: 0 }}>75% today</span>
             </div>
           </div>
           {/* Meal rail — fixed height, scrolls internally */}
           <div style={{ position: 'relative', height: railH, flexShrink: 0 }}>
             <div className="ns-meal-rail">
-              {NS_MEALS.map((meal, i) => (
+              {activeMeals.map((meal, i) => (
                 <motion.div
                   key={meal.name}
                   className="ns-meal-tile"
@@ -1327,10 +1362,10 @@ function NutritionStrategyCard({ variant = 'default' }: { variant?: 'default' | 
           </div>
           {/* CTAs */}
           <div className="ns-assigned-ctas" style={{ flexShrink: 0 }}>
-            <button className="ns-cta-p" style={{ padding: ctapy, fontSize: ctasz, background: 'linear-gradient(135deg, #6B8F71 0%, #4A6E50 100%)', color: '#fff', boxShadow: '0 3px 10px rgba(107,143,113,0.22)' }}>
+            <a href="/daily-plan" className="ns-cta-p" style={{ padding: ctapy, fontSize: ctasz, background: 'linear-gradient(135deg, #6B8F71 0%, #4A6E50 100%)', color: '#fff', boxShadow: '0 3px 10px rgba(107,143,113,0.22)', textDecoration: 'none' }}>
               <UtensilsCrossed size={12} strokeWidth={2.5} />
               View Full Meal Plan
-            </button>
+            </a>
             <button className="ns-cta-g" style={{ padding: ctapy, fontSize: ctasz }}>
               Request Adjustments
             </button>
@@ -1338,6 +1373,13 @@ function NutritionStrategyCard({ variant = 'default' }: { variant?: 'default' | 
         </div>
 
       </div>{/* end fixed-height content shell */}
+
+      {wizardOpen && (
+        <NutritionBlueprintWizard
+          onComplete={handleBlueprintComplete}
+          onClose={() => setWizardOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -2556,9 +2598,509 @@ function BiomarkerProgressShowcase() {
   );
 }
 
+// ---- Month 1 Discovery Journey ----
+
+type DiscoveryInsight = {
+  icon: string;
+  label: string;
+  text: string;
+  type: 'Opportunity' | 'Priority' | 'Goal' | 'Habit Pattern' | 'Strength' | 'Blueprint';
+  color: string;
+  bg: string;
+  border: string;
+};
+
+
+const DISCOVERY_MISSIONS = [
+  {
+    id: 0,
+    title: 'Understand Your Health',
+    description: 'Discover what your baseline health markers reveal about your current health.',
+    cta: 'Review Health Report',
+    insightPreview: 'Unlock 3 health marker insights',
+    time: '5 min',
+    img: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800&q=80',
+    gradient: 'linear-gradient(160deg, rgba(7,28,14,0.82) 0%, rgba(107,143,113,0.40) 100%)',
+    accent: '#A8C5AC',
+    accentBg: 'rgba(168,197,172,0.18)',
+    locked: false,
+    insights: [
+      { icon: '🩸', label: 'Blood Sugar', text: 'Blood sugar needs attention', type: 'Opportunity', color: '#C8604A', bg: 'rgba(200,96,74,0.08)', border: 'rgba(200,96,74,0.18)' },
+      { icon: '❤️', label: 'Blood Pressure', text: 'Blood pressure should be monitored', type: 'Priority', color: '#7B68EE', bg: 'rgba(123,104,238,0.07)', border: 'rgba(123,104,238,0.16)' },
+      { icon: '📊', label: 'Metabolic Risk', text: 'Moderate metabolic risk identified', type: 'Opportunity', color: '#C8604A', bg: 'rgba(200,96,74,0.06)', border: 'rgba(200,96,74,0.14)' },
+    ] as DiscoveryInsight[],
+  },
+  {
+    id: 1,
+    title: 'Know Your Risks',
+    description: 'Learn the key health risks influencing your future wellbeing.',
+    cta: 'View Risk Profile',
+    insightPreview: 'Reveal your priority health risks',
+    time: '4 min',
+    img: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80',
+    gradient: 'linear-gradient(160deg, rgba(28,10,10,0.82) 0%, rgba(200,96,74,0.40) 100%)',
+    accent: '#E8907E',
+    accentBg: 'rgba(200,96,74,0.18)',
+    locked: false,
+    insights: [
+      { icon: '🔥', label: 'Biggest Impact', text: 'Weight management could have the biggest impact on your health', type: 'Priority', color: '#C8604A', bg: 'rgba(200,96,74,0.08)', border: 'rgba(200,96,74,0.18)' },
+      { icon: '📈', label: 'Metabolic Health', text: 'Metabolic health is your highest priority area', type: 'Priority', color: '#C49A26', bg: 'rgba(212,168,67,0.08)', border: 'rgba(212,168,67,0.18)' },
+    ] as DiscoveryInsight[],
+  },
+  {
+    id: 2,
+    title: 'Build Your Health Goals',
+    description: 'Define what success looks like six months from now.',
+    cta: 'Set My Goals',
+    insightPreview: 'Discover your personal health goals',
+    time: '6 min',
+    img: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80',
+    gradient: 'linear-gradient(160deg, rgba(10,18,28,0.82) 0%, rgba(74,110,80,0.42) 100%)',
+    accent: '#A8C5AC',
+    accentBg: 'rgba(107,143,113,0.18)',
+    locked: false,
+    insights: [
+      { icon: '🎯', label: 'Goal', text: 'Reverse diabetes', type: 'Goal', color: '#4A6E50', bg: 'rgba(107,143,113,0.08)', border: 'rgba(107,143,113,0.18)' },
+      { icon: '⚖️', label: 'Goal', text: 'Lose weight', type: 'Goal', color: '#4A6E50', bg: 'rgba(107,143,113,0.07)', border: 'rgba(107,143,113,0.16)' },
+      { icon: '🚶', label: 'Goal', text: 'Improve daily activity', type: 'Goal', color: '#4A6E50', bg: 'rgba(107,143,113,0.07)', border: 'rgba(107,143,113,0.16)' },
+    ] as DiscoveryInsight[],
+  },
+  {
+    id: 3,
+    title: 'Discover Your Nutrition Patterns',
+    description: 'Understand how your eating habits affect energy, weight and blood sugar.',
+    cta: 'Explore Nutrition Patterns',
+    insightPreview: 'Unlock 3 personalised nutrition insights',
+    time: '8 min',
+    img: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80',
+    gradient: 'linear-gradient(160deg, rgba(20,12,4,0.82) 0%, rgba(212,168,67,0.40) 100%)',
+    accent: '#F0C96A',
+    accentBg: 'rgba(212,168,67,0.18)',
+    locked: false,
+    insights: [
+      { icon: '🥗', label: 'Nutrition', text: 'Protein intake below target', type: 'Opportunity', color: '#4A6E50', bg: 'rgba(107,143,113,0.08)', border: 'rgba(107,143,113,0.18)' },
+      { icon: '🌾', label: 'Nutrition', text: 'Fibre intake needs improvement', type: 'Habit Pattern', color: '#C49A26', bg: 'rgba(212,168,67,0.07)', border: 'rgba(212,168,67,0.18)' },
+      { icon: '🍪', label: 'Habit Pattern', text: 'Afternoon snacking is a common challenge', type: 'Habit Pattern', color: '#C8604A', bg: 'rgba(200,96,74,0.06)', border: 'rgba(200,96,74,0.14)' },
+    ] as DiscoveryInsight[],
+  },
+  {
+    id: 4,
+    title: 'Understand Your Sleep',
+    description: 'Identify habits that affect recovery and daily energy.',
+    cta: 'Explore Sleep Patterns',
+    insightPreview: 'Unlock sleep and recovery findings',
+    time: '5 min',
+    img: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80',
+    gradient: 'linear-gradient(160deg, rgba(4,10,24,0.85) 0%, rgba(46,84,144,0.42) 100%)',
+    accent: '#A8C0E8',
+    accentBg: 'rgba(70,120,200,0.18)',
+    locked: false,
+    insights: [
+      { icon: '😴', label: 'Sleep', text: 'Sleep duration below target', type: 'Opportunity', color: '#7B68EE', bg: 'rgba(123,104,238,0.07)', border: 'rgba(123,104,238,0.15)' },
+      { icon: '🌙', label: 'Sleep Rhythm', text: 'Bedtime consistency needs improvement', type: 'Habit Pattern', color: '#7B68EE', bg: 'rgba(123,104,238,0.07)', border: 'rgba(123,104,238,0.15)' },
+      { icon: '⚡', label: 'Recovery', text: 'Better recovery could improve energy', type: 'Strength', color: '#2E8B8B', bg: 'rgba(46,139,139,0.07)', border: 'rgba(46,139,139,0.16)' },
+    ] as DiscoveryInsight[],
+  },
+  {
+    id: 5,
+    title: 'Stress & Recovery Check',
+    description: 'Understand how stress influences your health and habits.',
+    cta: 'Reveal Stress Patterns',
+    insightPreview: 'Reveal your stress patterns',
+    time: '5 min',
+    img: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&q=80',
+    gradient: 'linear-gradient(160deg, rgba(16,10,34,0.85) 0%, rgba(110,98,170,0.42) 100%)',
+    accent: '#C8C0F0',
+    accentBg: 'rgba(110,98,170,0.18)',
+    locked: false,
+    insights: [
+      { icon: '🧠', label: 'Stress Trigger', text: 'Work appears to be your biggest stress trigger', type: 'Opportunity', color: '#7B68EE', bg: 'rgba(110,98,170,0.08)', border: 'rgba(110,98,170,0.18)' },
+      { icon: '🍽', label: 'Habit Pattern', text: 'Stress may influence your food choices', type: 'Habit Pattern', color: '#C8604A', bg: 'rgba(200,96,74,0.06)', border: 'rgba(200,96,74,0.14)' },
+      { icon: '🌿', label: 'Recovery', text: 'Recovery opportunities identified', type: 'Strength', color: '#2E8B8B', bg: 'rgba(46,139,139,0.07)', border: 'rgba(46,139,139,0.16)' },
+    ] as DiscoveryInsight[],
+  },
+  {
+    id: 6,
+    title: 'Gut Health Check',
+    description: 'Discover behaviours that support digestion and long-term metabolic health.',
+    cta: 'Explore Gut Health',
+    insightPreview: 'Discover your gut health patterns',
+    time: '6 min',
+    img: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&q=80',
+    gradient: 'linear-gradient(160deg, rgba(8,20,8,0.82) 0%, rgba(74,140,80,0.40) 100%)',
+    accent: '#A8C5AC',
+    accentBg: 'rgba(107,143,113,0.18)',
+    locked: false,
+    insights: [
+      { icon: '🌱', label: 'Gut Health', text: 'Fibre diversity can improve', type: 'Opportunity', color: '#4A6E50', bg: 'rgba(107,143,113,0.08)', border: 'rgba(107,143,113,0.18)' },
+      { icon: '💧', label: 'Hydration', text: 'Hydration may support digestion', type: 'Habit Pattern', color: '#5BA4CF', bg: 'rgba(91,164,207,0.07)', border: 'rgba(91,164,207,0.16)' },
+      { icon: '🥬', label: 'Opportunity', text: 'Gut health opportunity identified', type: 'Opportunity', color: '#4A6E50', bg: 'rgba(107,143,113,0.07)', border: 'rgba(107,143,113,0.16)' },
+    ] as DiscoveryInsight[],
+  },
+  {
+    id: 7,
+    title: 'Your Personal Health Blueprint',
+    description: 'Your personalised health strategy generated from everything you\'ve discovered.',
+    cta: 'Generate My Blueprint',
+    insightPreview: 'Generate your complete health blueprint',
+    time: '2 min',
+    img: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80',
+    gradient: 'linear-gradient(160deg, rgba(24,16,0,0.90) 0%, rgba(184,132,14,0.50) 100%)',
+    accent: '#F0C96A',
+    accentBg: 'rgba(212,168,67,0.22)',
+    locked: true,
+    insights: [
+      { icon: '🏆', label: 'Your Health Blueprint', text: 'Your personalised health strategy is ready', type: 'Blueprint', color: '#B8840E', bg: 'rgba(212,168,67,0.12)', border: 'rgba(212,168,67,0.28)' },
+      { icon: '1️⃣', label: 'Top Priority', text: 'Improve Sleep', type: 'Priority', color: '#7B68EE', bg: 'rgba(123,104,238,0.07)', border: 'rgba(123,104,238,0.16)' },
+      { icon: '2️⃣', label: 'Priority', text: 'Improve Nutrition', type: 'Priority', color: '#4A6E50', bg: 'rgba(107,143,113,0.08)', border: 'rgba(107,143,113,0.18)' },
+      { icon: '3️⃣', label: 'Priority', text: 'Increase Activity', type: 'Priority', color: '#C49A26', bg: 'rgba(212,168,67,0.07)', border: 'rgba(212,168,67,0.18)' },
+    ] as DiscoveryInsight[],
+  },
+];
+
+function DiscoveryJourneySection({ done, onToggle }: { done: boolean[]; onToggle: (i: number) => void }) {
+  const completedCount = done.filter(Boolean).length;
+  const total = DISCOVERY_MISSIONS.length;
+  const pct = Math.round((completedCount / total) * 100);
+  const allPreviousDone = done.slice(0, total - 1).every(Boolean);
+
+  return (
+    <div style={{ background: '#fff' }}>
+
+      {/* ── Section Header ── */}
+      <div style={{ padding: '40px 24px 24px' }}>
+        <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '6px' }}>
+          MONTH 1 · DISCOVERY
+        </p>
+        <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: '8px' }}>
+          Your Month 1 Discovery Journey
+        </h2>
+        <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.6, marginBottom: '24px' }}>
+          Over the next few weeks you&apos;ll uncover the factors shaping your health today and build the foundation for lasting change.
+        </p>
+
+        {/* Health Story progress */}
+        <div style={{ background: 'var(--color-surface)', borderRadius: '16px', padding: '16px 18px', border: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-ink)' }}>Your Health Story</p>
+            <p style={{ fontSize: '18px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>{pct}<span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-muted)' }}>% Discovered</span></p>
+          </div>
+          <div style={{ height: '5px', background: 'var(--color-border)', borderRadius: '3px', overflow: 'hidden', marginBottom: '8px' }}>
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.7, ease: 'easeOut' }}
+              style={{ height: '100%', background: 'linear-gradient(90deg, var(--color-sage), #F0C96A)', borderRadius: '3px' }}
+            />
+          </div>
+          <p style={{ fontSize: '11px', color: 'var(--color-muted)', lineHeight: 1.4 }}>Every discovery helps us build a clearer picture of your health.</p>
+        </div>
+      </div>
+
+      {/* ── Carousel ── */}
+      <div style={{ overflowX: 'auto', paddingBottom: '32px', scrollSnapType: 'x mandatory' }}>
+        <div style={{ display: 'flex', gap: '14px', padding: '4px 24px' }}>
+          {DISCOVERY_MISSIONS.map((mission, i) => {
+            const isCompleted = done[i];
+            const isLocked = mission.locked && !allPreviousDone;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06, duration: 0.4 }}
+                style={{
+                  width: '260px', flexShrink: 0, borderRadius: '24px', overflow: 'hidden',
+                  position: 'relative', scrollSnapAlign: 'start',
+                  boxShadow: isLocked ? '0 2px 16px rgba(0,0,0,0.08)' : isCompleted ? '0 4px 24px rgba(107,143,113,0.18)' : '0 4px 20px rgba(0,0,0,0.10)',
+                  border: isCompleted ? '1.5px solid rgba(107,143,113,0.30)' : '1px solid rgba(0,0,0,0.06)',
+                  filter: isLocked ? 'grayscale(0.5) brightness(0.82)' : 'none',
+                  cursor: isLocked ? 'default' : 'pointer',
+                }}
+              >
+                {/* Card image */}
+                <div style={{ position: 'relative', height: '160px', overflow: 'hidden' }}>
+                  <img
+                    src={mission.img}
+                    alt={mission.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 40%' }}
+                  />
+                  <div style={{ position: 'absolute', inset: 0, background: mission.gradient }} />
+
+                  {/* Time badge */}
+                  <div style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', borderRadius: '20px', padding: '3px 10px' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#fff' }}>{mission.time}</span>
+                  </div>
+
+                  {/* Completion badge */}
+                  {isCompleted && (
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 360, damping: 20 }}
+                      style={{ position: 'absolute', top: '12px', right: '12px', background: 'var(--color-sage)', borderRadius: '20px', padding: '3px 9px', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 12px rgba(107,143,113,0.40)' }}
+                    >
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <span style={{ fontSize: '9px', fontWeight: 700, color: '#fff' }}>Discovered</span>
+                    </motion.div>
+                  )}
+
+                  {/* Lock icon */}
+                  {isLocked && (
+                    <div style={{ position: 'absolute', top: '12px', right: '12px', width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,0,0,0.50)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Lock size={12} strokeWidth={2.5} color="#fff" />
+                    </div>
+                  )}
+
+                  {/* Mission label */}
+                  <div style={{ position: 'absolute', bottom: '10px', left: '14px' }}>
+                    <p style={{ fontSize: '10px', fontWeight: 700, color: mission.accent, textTransform: 'uppercase' as const, letterSpacing: '0.10em' }}>Mission {i + 1}</p>
+                  </div>
+                </div>
+
+                {/* Card body */}
+                <div style={{ padding: '16px 16px 18px', background: '#fff', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', lineHeight: 1.25 }}>{mission.title}</h3>
+
+                  {/* Insight preview strip */}
+                  {!isCompleted && !isLocked && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: mission.accentBg, borderRadius: '8px', padding: '6px 10px' }}>
+                      <Sparkles size={10} color={mission.accent} strokeWidth={2.5} />
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: mission.accent, lineHeight: 1.3 }}>{mission.insightPreview}</span>
+                    </div>
+                  )}
+
+                  {/* Unlocked insights */}
+                  {isCompleted && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      {mission.insights.slice(0, 2).map((ins, j) => (
+                        <div key={j} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: ins.bg, borderRadius: '8px', padding: '5px 9px', border: `1px solid ${ins.border}` }}>
+                          <span style={{ fontSize: '13px' }}>{ins.icon}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 500, color: ins.color, lineHeight: 1.3 }}>{ins.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => !isLocked && onToggle(i)}
+                    style={{
+                      marginTop: '2px',
+                      padding: '9px 14px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      cursor: isLocked ? 'not-allowed' : 'pointer',
+                      fontSize: '12px', fontWeight: 700,
+                      background: isCompleted ? 'rgba(107,143,113,0.10)' : isLocked ? 'var(--color-border)' : mission.accentBg,
+                      color: isCompleted ? 'var(--color-sage)' : isLocked ? 'var(--color-muted)' : mission.accent,
+                      transition: 'all 0.15s ease',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                    }}
+                  >
+                    {isLocked ? (
+                      <><Lock size={11} strokeWidth={2.5} /> Complete missions first</>
+                    ) : isCompleted ? (
+                      <><svg width="11" height="9" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg> Insights Unlocked</>
+                    ) : (
+                      <>{mission.cta} <ArrowRight size={11} /></>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Desktop Discovery Journey (cinematic card carousel)
+function DiscoveryJourneySectionDesktop({ done, onToggle }: { done: boolean[]; onToggle: (i: number) => void }) {
+  const completedCount = done.filter(Boolean).length;
+  const total = DISCOVERY_MISSIONS.length;
+  const pct = Math.round((completedCount / total) * 100);
+  const allPreviousDone = done.slice(0, total - 1).every(Boolean);
+
+  return (
+    <div className="m1-dt-discovery-journey">
+      <div className="m1-dt-dj-inner">
+
+        {/* Header + Health Story Progress */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '40px', gap: '60px' }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.14em', marginBottom: '8px' }}>
+              MONTH 1 · DISCOVERY
+            </p>
+            <h2 style={{ fontSize: '44px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.04em', lineHeight: 1.0, marginBottom: '12px' }}>
+              Your Month 1 Discovery Journey
+            </h2>
+            <p style={{ fontSize: '15px', color: 'var(--color-muted)', lineHeight: 1.6, maxWidth: '520px' }}>
+              Over the next few weeks you&apos;ll uncover the factors shaping your health today and build the foundation for lasting change.
+            </p>
+          </div>
+
+          {/* Your Health Story progress widget */}
+          <div style={{ flexShrink: 0, width: '280px', background: 'var(--color-surface)', borderRadius: '20px', padding: '24px 26px', border: '1px solid var(--color-border)' }}>
+            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '10px' }}>Your Health Story</p>
+            <p style={{ fontSize: '36px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '12px' }}>
+              {pct}<span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-muted)' }}>% Discovered</span>
+            </p>
+            <div style={{ height: '6px', background: 'var(--color-border)', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${pct}%` }}
+                transition={{ duration: 0.9, ease: 'easeOut', delay: 0.2 }}
+                style={{ height: '100%', background: 'linear-gradient(90deg, var(--color-sage), #F0C96A)', borderRadius: '3px' }}
+              />
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--color-muted)', lineHeight: 1.5 }}>Every discovery helps us build a clearer picture of your health.</p>
+          </div>
+        </div>
+
+        {/* Cinematic carousel */}
+        <div className="m1-dt-dj-carousel">
+          {DISCOVERY_MISSIONS.map((mission, i) => {
+            const isCompleted = done[i];
+            const isLocked = mission.locked && !allPreviousDone;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.07, duration: 0.45 }}
+                className="m1-dt-dj-card"
+                style={{
+                  border: isCompleted ? '1.5px solid rgba(107,143,113,0.32)' : '1px solid rgba(0,0,0,0.07)',
+                  filter: isLocked ? 'grayscale(0.45) brightness(0.80)' : 'none',
+                  cursor: isLocked ? 'default' : 'pointer',
+                  boxShadow: isLocked ? 'none' : isCompleted ? '0 8px 40px rgba(107,143,113,0.16)' : '0 6px 28px rgba(0,0,0,0.09)',
+                }}
+              >
+                {/* Image area */}
+                <div style={{ position: 'relative', height: '180px', overflow: 'hidden', borderRadius: '20px 20px 0 0' }}>
+                  <img
+                    src={mission.img}
+                    alt={mission.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 40%', transition: 'transform 0.4s ease' }}
+                  />
+                  <div style={{ position: 'absolute', inset: 0, background: mission.gradient }} />
+
+                  {/* Top badges */}
+                  <div style={{ position: 'absolute', top: '12px', left: '12px', right: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ background: 'rgba(0,0,0,0.48)', backdropFilter: 'blur(10px)', borderRadius: '20px', padding: '4px 11px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff' }}>{mission.time}</span>
+                    </div>
+                    {isCompleted && (
+                      <motion.div
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+                        style={{ background: 'var(--color-sage)', borderRadius: '20px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 4px 16px rgba(107,143,113,0.45)' }}
+                      >
+                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        <span style={{ fontSize: '10px', fontWeight: 700, color: '#fff' }}>Discovered</span>
+                      </motion.div>
+                    )}
+                    {isLocked && (
+                      <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Lock size={12} strokeWidth={2.5} color="#fff" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Mission label */}
+                  <div style={{ position: 'absolute', bottom: '12px', left: '14px' }}>
+                    <p style={{ fontSize: '10px', fontWeight: 700, color: mission.accent, textTransform: 'uppercase' as const, letterSpacing: '0.12em' }}>
+                      Mission {i + 1}
+                    </p>
+                  </div>
+
+                  {/* Premium glow for blueprint card */}
+                  {mission.id === 7 && (
+                    <motion.div
+                      animate={{ opacity: [0.3, 0.55, 0.3] }}
+                      transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+                      style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 70% 60% at 50% 70%, rgba(212,168,67,0.28) 0%, transparent 70%)', pointerEvents: 'none' }}
+                    />
+                  )}
+                </div>
+
+                {/* Body */}
+                <div style={{ padding: '20px 20px 22px', background: '#fff', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.025em', lineHeight: 1.25 }}>
+                    {mission.title}
+                  </h3>
+
+                  {/* Insight preview — shown before completion */}
+                  {!isCompleted && !isLocked && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: mission.accentBg, borderRadius: '10px', padding: '7px 11px' }}>
+                      <Sparkles size={11} color={mission.accent} strokeWidth={2.5} />
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: mission.accent, lineHeight: 1.35 }}>{mission.insightPreview}</span>
+                    </div>
+                  )}
+
+                  {/* Unlocked insights — revealed after completion */}
+                  {isCompleted && (
+                    <AnimatePresence>
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.35 }}
+                        style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}
+                      >
+                        {mission.insights.map((ins, j) => (
+                          <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: '7px', background: ins.bg, borderRadius: '9px', padding: '6px 10px', border: `1px solid ${ins.border}` }}>
+                            <span style={{ fontSize: '13px', lineHeight: 1, marginTop: '1px' }}>{ins.icon}</span>
+                            <span style={{ fontSize: '11px', fontWeight: 500, color: ins.color, lineHeight: 1.4 }}>{ins.text}</span>
+                          </div>
+                        ))}
+                      </motion.div>
+                    </AnimatePresence>
+                  )}
+
+                  <button
+                    onClick={() => !isLocked && onToggle(i)}
+                    style={{
+                      padding: '11px 16px',
+                      borderRadius: '14px',
+                      border: 'none',
+                      cursor: isLocked ? 'not-allowed' : 'pointer',
+                      fontSize: '12px', fontWeight: 700,
+                      background: isCompleted ? 'rgba(107,143,113,0.08)' : isLocked ? 'var(--color-border)' : mission.accentBg,
+                      color: isCompleted ? 'var(--color-sage)' : isLocked ? 'var(--color-muted)' : mission.accent,
+                      transition: 'all 0.18s ease',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                      marginTop: 'auto',
+                    }}
+                  >
+                    {isLocked ? (
+                      <><Lock size={11} strokeWidth={2.5} /> Complete missions first</>
+                    ) : isCompleted ? (
+                      <><svg width="11" height="9" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg> Insights Unlocked</>
+                    ) : (
+                      <>{mission.cta} <ArrowRight size={11} /></>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- Month 1 Active Content (in-progress experience) ----
 function Month1ActiveContent() {
-  const [missionDone, setMissionDone] = useState([false, false, false, false, false]);
+  const [discoveryDone, setDiscoveryDone] = useState(Array(DISCOVERY_MISSIONS.length).fill(false) as boolean[]);
+  const handleDiscoveryToggle = (i: number) => {
+    const mission = DISCOVERY_MISSIONS[i];
+    if (mission && !mission.locked) {
+      setDiscoveryDone(prev => prev.map((v, idx) => idx === i ? !v : v));
+    }
+  };
 
   const JOURNEY = [
     { icon: '🔬', label: 'Health Assessment', sub: 'Risk profile completed',        status: 'done' as const },
@@ -2568,20 +3110,9 @@ function Month1ActiveContent() {
     { icon: '🎯', label: 'Goal Setting',       sub: 'With Dr. Ananya · Week 4',      status: 'upcoming' as const },
   ];
 
-  const INSIGHTS = [
-    { icon: '🥗', area: 'Nutrition',  text: 'You often skip protein at breakfast.',    tint: 'rgba(107,143,113,0.08)',  border: 'rgba(107,143,113,0.18)', color: 'var(--color-sage)' },
-    { icon: '😴', area: 'Sleep',      text: 'Average sleep is 6.4 hours per night.',   tint: 'rgba(123,104,238,0.07)',  border: 'rgba(123,104,238,0.15)', color: '#7B68EE' },
-    { icon: '🚶', area: 'Activity',   text: 'You\'re most active on weekends.',         tint: 'rgba(212,168,67,0.07)',   border: 'rgba(212,168,67,0.18)',  color: '#C49A26' },
-    { icon: '🧠', area: 'Stress',     text: 'Stress tends to peak in the evenings.',   tint: 'rgba(200,96,74,0.06)',    border: 'rgba(200,96,74,0.15)',   color: 'var(--color-terracotta)' },
-  ];
+  // Collect all unlocked insights from completed missions
+  const unlockedInsights = DISCOVERY_MISSIONS.flatMap((m, i) => discoveryDone[i] ? m.insights.map(ins => ({ ...ins, missionTitle: m.title })) : []);
 
-  const MISSION = [
-    { icon: '🥗', label: 'Track meals' },
-    { icon: '😴', label: 'Track sleep' },
-    { icon: '🚶', label: '5,000 steps daily' },
-    { icon: '💧', label: 'Stay hydrated' },
-    { icon: '🎯', label: 'Define your health goal' },
-  ];
 
   return (
     <>
@@ -2682,28 +3213,50 @@ function Month1ActiveContent() {
 
       </div>{/* end padded body up to here */}
 
+      {/* ── 2b. YOUR MONTH 1 DISCOVERY JOURNEY ── */}
+      <DiscoveryJourneySection done={discoveryDone} onToggle={handleDiscoveryToggle} />
+
       {/* ── 3. MY TRANSFORMATION STORY ── */}
       <MonthTransformationStory monthNum={1} />
+
+      {/* ── 3b. DAILY OPERATIONS ── */}
+      <DailyOperationsSection monthNum={1} />
 
       {/* ── BIOMARKER PROGRESS SHOWCASE ── */}
       <BiomarkerProgressShowcase />
 
       <div style={{ padding: '0 24px 0', display: 'flex', flexDirection: 'column', gap: '28px', marginTop: '28px' }}>
 
-        {/* ── 4. WHAT WE'VE LEARNED ABOUT YOU ── */}
+        {/* ── 4. INSIGHTS YOU'VE UNLOCKED ── */}
         <div>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '4px' }}>Your Personal Health Story</p>
-          <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '4px' }}>What we&apos;ve learned about you</p>
-          <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.5, marginBottom: '18px' }}>Early patterns from your first 12 days.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {INSIGHTS.map((item, i) => (
-              <div key={i} style={{ background: item.tint, border: `1px solid ${item.border}`, borderRadius: '20px', padding: '18px 16px' }}>
-                <div style={{ fontSize: '28px', marginBottom: '12px' }}>{item.icon}</div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: item.color, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: '6px' }}>{item.area}</p>
-                <p style={{ fontSize: '13px', color: 'var(--color-ink)', lineHeight: 1.55, fontWeight: 500 }}>{item.text}</p>
-              </div>
-            ))}
-          </div>
+          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '4px' }}>Insights You&apos;ve Unlocked</p>
+          <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '4px' }}>Your health story so far</p>
+          <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.5, marginBottom: '18px' }}>Every discovery mission reveals something unique about your health.</p>
+          {unlockedInsights.length === 0 ? (
+            <div style={{ background: 'var(--color-surface)', border: '1.5px dashed var(--color-border)', borderRadius: '20px', padding: '28px 20px', textAlign: 'center' as const }}>
+              <div style={{ fontSize: '32px', marginBottom: '10px' }}>🔍</div>
+              <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '6px' }}>Your insights are waiting</p>
+              <p style={{ fontSize: '12px', color: 'var(--color-muted)', lineHeight: 1.55 }}>Complete a discovery mission above to reveal your first personalised health insight.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {unlockedInsights.map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  style={{ background: item.bg, border: `1px solid ${item.border}`, borderRadius: '16px', padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}
+                >
+                  <div style={{ fontSize: '22px', lineHeight: 1, marginTop: '1px', flexShrink: 0 }}>{item.icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '10px', fontWeight: 700, color: item.color, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '4px' }}>{item.label}</p>
+                    <p style={{ fontSize: '13px', color: 'var(--color-ink)', lineHeight: 1.5, fontWeight: 500 }}>{item.text}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── 4. YOUR STARTING POINT ── */}
@@ -2733,47 +3286,7 @@ function Month1ActiveContent() {
           </div>
         </div>
 
-        {/* ── 5. YOUR MISSION THIS MONTH ── */}
-        <div>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '4px' }}>Your Month 1 Mission</p>
-          <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '4px' }}>Focus on awareness, not perfection.</p>
-          <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.5, marginBottom: '18px' }}>Five simple activities. Each one builds your health picture.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {MISSION.map((item, i) => (
-              <button
-                key={i}
-                onClick={() => setMissionDone(prev => prev.map((v, idx) => idx === i ? !v : v))}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '16px',
-                  background: missionDone[i] ? 'rgba(107,143,113,0.07)' : '#fff',
-                  border: `1px solid ${missionDone[i] ? 'rgba(107,143,113,0.22)' : 'var(--color-border)'}`,
-                  borderRadius: '18px', padding: '16px 18px',
-                  cursor: 'pointer', textAlign: 'left' as const, width: '100%',
-                  transition: 'all 0.15s ease',
-                  boxShadow: missionDone[i] ? 'none' : '0 1px 6px rgba(0,0,0,0.05)',
-                }}
-              >
-                <div style={{
-                  width: '44px', height: '44px', borderRadius: '14px', flexShrink: 0,
-                  background: missionDone[i] ? 'var(--color-sage)' : 'var(--color-surface)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '22px',
-                  transition: 'all 0.15s ease',
-                }}>
-                  {missionDone[i]
-                    ? <svg width="18" height="14" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                    : item.icon}
-                </div>
-                <p style={{ fontSize: '14px', fontWeight: missionDone[i] ? 400 : 600, color: missionDone[i] ? 'var(--color-muted)' : 'var(--color-ink)', textDecoration: missionDone[i] ? 'line-through' : 'none', flex: 1, lineHeight: 1.3 }}>
-                  {item.label}
-                </p>
-                <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-muted)', flexShrink: 0 }}>{i + 1}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* ── 6. MONTH 2 PREVIEW ── */}
+        {/* ── 5. MONTH 2 PREVIEW ── */}
         <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.10)' }}>
           <img
             src="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&q=80"
@@ -2900,115 +3413,102 @@ function Month1ActiveContent() {
           </div>
         </div>
 
-        {/* ── S1b: MY TRANSFORMATION STORY ── */}
+        {/* ── S1b: YOUR MONTH 1 DISCOVERY JOURNEY ── */}
+        <DiscoveryJourneySectionDesktop done={discoveryDone} onToggle={handleDiscoveryToggle} />
+
+        {/* ── S1c: MY TRANSFORMATION STORY ── */}
         <MonthTransformationStory monthNum={1} />
 
-        {/* ── S1c: BIOMARKER PROGRESS SHOWCASE ── */}
+        {/* ── S1d: DAILY OPERATIONS ── */}
+        <DailyOperationsSection monthNum={1} />
+
+        {/* ── S1e: BIOMARKER PROGRESS SHOWCASE ── */}
         <BiomarkerProgressShowcase />
 
-        {/* ── S2: UNDERSTANDING YOU WORKSPACE (50/50) ── */}
+        {/* ── S2: INSIGHTS YOU'VE UNLOCKED ── */}
         <div className="m1-dt-section m1-dt-section-sage">
-          <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '48px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '8px' }}>Understanding You</p>
-              <h3 style={{ fontSize: '40px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.035em', lineHeight: 1.05 }}>We are learning about you.</h3>
-            </div>
-            <div className="m1-dt-discovery-workspace">
-              {/* LEFT 50%: What We've Learned */}
-              <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '6px' }}>Your Personal Health Story</p>
-                <p style={{ fontSize: '22px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '6px' }}>What we&apos;ve learned about you</p>
-                <p style={{ fontSize: '14px', color: 'var(--color-muted)', lineHeight: 1.55, marginBottom: '28px' }}>Early patterns from your first 12 days.</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  {INSIGHTS.map((item, i) => (
-                    <motion.div key={i} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.07 }}
-                      style={{ background: item.tint, border: `1px solid ${item.border}`, borderRadius: '24px', padding: '24px 20px' }}>
-                      <div style={{ fontSize: '32px', marginBottom: '14px' }}>{item.icon}</div>
-                      <p style={{ fontSize: '11px', fontWeight: 700, color: item.color, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '8px' }}>{item.area}</p>
-                      <p style={{ fontSize: '14px', color: 'var(--color-ink)', lineHeight: 1.60, fontWeight: 500 }}>{item.text}</p>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-              {/* RIGHT 50%: Starting Point */}
-              <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '6px' }}>Your Starting Point</p>
-                <p style={{ fontSize: '22px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '6px' }}>Your baseline numbers</p>
-                <p style={{ fontSize: '14px', color: 'var(--color-muted)', lineHeight: 1.55, marginBottom: '28px' }}>We&apos;ll measure all future progress against these.</p>
-                <div style={{ background: '#fff', borderRadius: '28px', padding: '0', border: '1px solid var(--color-border)', boxShadow: '0 6px 32px rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0' }}>
-                    {[
-                      { label: 'Weight',         value: '82',     unit: 'kg',    border: true,  borderRight: true },
-                      { label: 'Waist',           value: '94',     unit: 'cm',    border: true,  borderRight: false },
-                      { label: 'Blood Sugar',     value: '108',    unit: 'mg/dL', border: false, borderRight: true },
-                      { label: 'Blood Pressure',  value: '138/88', unit: 'mmHg',  border: false, borderRight: false },
-                    ].map((m, i) => (
-                      <div key={i} style={{
-                        padding: '32px 28px',
-                        borderBottom: m.border ? '1px solid var(--color-border)' : 'none',
-                        borderRight: m.borderRight ? '1px solid var(--color-border)' : 'none',
-                      }}>
-                        <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: '10px' }}>{m.label}</p>
-                        <p style={{ fontSize: '36px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '5px' }}>{m.value}</p>
-                        <p style={{ fontSize: '14px', color: 'var(--color-muted)', fontWeight: 500 }}>{m.unit}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
 
-        {/* ── S3: YOUR MONTH 1 MISSION ── */}
-        <div className="m1-dt-section m1-dt-section-white">
-          <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-            <div style={{ marginBottom: '48px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '8px' }}>Your Month 1 Mission</p>
-              <h3 style={{ fontSize: '40px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.035em', lineHeight: 1.05 }}>Focus on awareness,<br />not perfection.</h3>
-              <p style={{ fontSize: '16px', color: 'var(--color-muted)', marginTop: '14px', maxWidth: '560px', lineHeight: 1.6 }}>Five simple activities. Each one builds your health picture and moves you closer to Month 2.</p>
+            {/* Section header */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '48px', gap: '40px' }}>
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '8px' }}>Insights You&apos;ve Unlocked</p>
+                <h3 style={{ fontSize: '40px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.035em', lineHeight: 1.05, marginBottom: '12px' }}>Your health story,<br />as it unfolds.</h3>
+                <p style={{ fontSize: '15px', color: 'var(--color-muted)', lineHeight: 1.6, maxWidth: '520px' }}>Every discovery mission reveals something unique about your health. These insights will help shape your personalised transformation journey.</p>
+              </div>
+              {/* Starting Point quick stats */}
+              <div style={{ flexShrink: 0, display: 'flex', gap: '16px' }}>
+                {[
+                  { label: 'Weight', value: '82', unit: 'kg' },
+                  { label: 'Blood Sugar', value: '108', unit: 'mg/dL' },
+                  { label: 'Blood Pressure', value: '138/88', unit: 'mmHg' },
+                ].map((m, i) => (
+                  <div key={i} style={{ background: '#fff', borderRadius: '18px', padding: '20px 22px', border: '1px solid var(--color-border)', textAlign: 'center' as const, minWidth: '110px' }}>
+                    <p style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: '6px' }}>{m.label}</p>
+                    <p style={{ fontSize: '22px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '3px' }}>{m.value}</p>
+                    <p style={{ fontSize: '11px', color: 'var(--color-muted)' }}>{m.unit}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px' }}>
-              {MISSION.map((item, i) => (
-                <button
-                  key={i}
-                  onClick={() => setMissionDone(prev => prev.map((v, idx) => idx === i ? !v : v))}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px',
-                    background: missionDone[i] ? 'rgba(107,143,113,0.07)' : '#fff',
-                    border: `1.5px solid ${missionDone[i] ? 'rgba(107,143,113,0.28)' : 'var(--color-border)'}`,
-                    borderRadius: '28px', padding: '32px 24px 28px',
-                    cursor: 'pointer', textAlign: 'center' as const, width: '100%',
-                    transition: 'all 0.18s ease',
-                    boxShadow: missionDone[i] ? '0 2px 16px rgba(107,143,113,0.12)' : '0 2px 12px rgba(0,0,0,0.04)',
-                  }}
+
+            {/* Empty state */}
+            {unlockedInsights.length === 0 && (
+              <div style={{ background: '#fff', border: '1.5px dashed var(--color-border)', borderRadius: '28px', padding: '60px 40px', textAlign: 'center' as const, maxWidth: '560px', margin: '0 auto' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+                <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', marginBottom: '10px', letterSpacing: '-0.02em' }}>Your insights are waiting</p>
+                <p style={{ fontSize: '14px', color: 'var(--color-muted)', lineHeight: 1.6 }}>Complete a discovery mission above to reveal your first personalised health insight.</p>
+              </div>
+            )}
+
+            {/* Insight grid — mixed sizes for visual hierarchy */}
+            {unlockedInsights.length > 0 && (() => {
+              const featured = unlockedInsights[0]!;
+              return (
+              <div className="m1-dt-insights-grid">
+                {/* Featured large insight — first unlocked */}
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="m1-dt-insight-featured"
+                  style={{ background: featured.bg, border: `1.5px solid ${featured.border}` }}
                 >
-                  <div style={{
-                    width: '64px', height: '64px', borderRadius: '20px', flexShrink: 0,
-                    background: missionDone[i] ? 'var(--color-sage)' : 'var(--color-surface)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '28px', boxShadow: missionDone[i] ? '0 4px 16px rgba(107,143,113,0.28)' : 'none',
-                    transition: 'all 0.18s ease',
-                  }}>
-                    {missionDone[i]
-                      ? <svg width="24" height="19" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      : item.icon}
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: featured.color, textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '12px' }}>Biggest Opportunity</p>
+                  <p style={{ fontSize: '28px', lineHeight: 1, marginBottom: '16px' }}>{featured.icon}</p>
+                  <h4 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.025em', lineHeight: 1.2, marginBottom: '10px' }}>{featured.text}</h4>
+                  <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.6 }}>Discovered from: {featured.missionTitle}</p>
+                  <div style={{ marginTop: '20px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: featured.color, borderRadius: '20px', padding: '6px 14px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff' }}>✦ New Insight Unlocked</span>
                   </div>
-                  <div>
-                    <p style={{ fontSize: '15px', fontWeight: missionDone[i] ? 400 : 700, color: missionDone[i] ? 'var(--color-muted)' : 'var(--color-ink)', textDecoration: missionDone[i] ? 'line-through' : 'none', lineHeight: 1.3 }}>
-                      {item.label}
-                    </p>
-                    {!missionDone[i] && (
-                      <p style={{ fontSize: '12px', color: 'var(--color-muted)', marginTop: '4px' }}>Task {i + 1} of {MISSION.length}</p>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
+                </motion.div>
+
+                {/* Remaining insight cards */}
+                {unlockedInsights.slice(1).map((item, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.08 + i * 0.06, duration: 0.4 }}
+                    className="m1-dt-insight-card"
+                    style={{ background: item.bg, border: `1px solid ${item.border}` }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '24px', lineHeight: 1 }}>{item.icon}</span>
+                      <span style={{ fontSize: '9px', fontWeight: 700, color: item.color, textTransform: 'uppercase' as const, letterSpacing: '0.10em', background: `${item.color}18`, padding: '3px 8px', borderRadius: '20px' }}>{item.type}</span>
+                    </div>
+                    <p style={{ fontSize: '10px', fontWeight: 700, color: item.color, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '6px' }}>{item.label}</p>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.45 }}>{item.text}</p>
+                    <p style={{ fontSize: '11px', color: 'var(--color-muted)', marginTop: '8px' }}>{item.missionTitle}</p>
+                  </motion.div>
+                ))}
+              </div>
+              );
+            })()}
           </div>
         </div>
 
-        {/* ── S4: MONTH 2 PREVIEW — Cinematic Transition Banner ── */}
+        {/* ── S3: MONTH 2 PREVIEW — Cinematic Transition Banner ── */}
         <div style={{ position: 'relative', overflow: 'hidden', minHeight: '480px' }}>
           <img
             src="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=1800&q=90"
@@ -3088,8 +3588,48 @@ function Month1Content() {
           padding: 56px 48px; gap: 0; position: relative; overflow: hidden;
         }
 
-        /* Active: Discovery workspace (50/50) */
-        .m1-dt-discovery-workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+        /* Insights grid — masonry-style mixed sizes */
+        .m1-dt-insights-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          grid-auto-rows: auto;
+          gap: 20px;
+          align-items: start;
+        }
+        .m1-dt-insight-featured {
+          grid-column: span 2;
+          border-radius: 28px;
+          padding: 36px 32px 32px;
+          transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+        .m1-dt-insight-featured:hover { transform: translateY(-3px); box-shadow: 0 12px 48px rgba(0,0,0,0.10); }
+        .m1-dt-insight-card {
+          border-radius: 24px;
+          padding: 24px 22px;
+          transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+        .m1-dt-insight-card:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(0,0,0,0.08); }
+
+        /* Discovery Journey section */
+        .m1-dt-discovery-journey { background: #ffffff; }
+        .m1-dt-dj-inner { max-width: 1600px; margin: 0 auto; padding: 80px 80px 72px; }
+        .m1-dt-dj-carousel {
+          display: flex; gap: 20px;
+          overflow-x: auto; padding-bottom: 8px;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: thin; scrollbar-color: var(--color-border) transparent;
+        }
+        .m1-dt-dj-carousel::-webkit-scrollbar { height: 4px; }
+        .m1-dt-dj-carousel::-webkit-scrollbar-track { background: transparent; }
+        .m1-dt-dj-carousel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+        .m1-dt-dj-card {
+          flex-shrink: 0; width: 320px; border-radius: 20px; overflow: hidden;
+          background: #fff; scroll-snap-align: start;
+          display: flex; flex-direction: column;
+          transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }
+        .m1-dt-dj-card:hover { transform: translateY(-4px); }
 
         /* Completed: Achievement workspace (70/30) */
         .m1-dt-achievement-workspace { display: grid; grid-template-columns: 70fr 30fr; gap: 40px; align-items: stretch; }
@@ -3104,6 +3644,8 @@ function Month1Content() {
       @media (min-width: 1400px) {
         .m1-dt-hero-workspace { min-height: 680px; }
         .m1-dt-section { padding: 88px 96px; }
+        .m1-dt-dj-inner { padding: 96px 96px 88px; }
+        .m1-dt-dj-card { width: 360px; }
       }
     `}</style>
 
@@ -3138,16 +3680,8 @@ function Month1Content() {
 
 // ---- Month 2 Content ----
 function Month2Content() {
-  const [goalChecked, setGoalChecked] = useState([true, true, false, false]);
   const [photos, setPhotos] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const goals = [
-    'Build structured eating habits using the Indian Plate Model',
-    'Improve movement consistency — walk 6,000–8,000 steps daily',
-    'Reduce processed food & eliminate sugary drinks',
-    'Improve daily routine adherence',
-  ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -3160,15 +3694,6 @@ function Month2Content() {
     setPhotos(prev => [...prev, ...urls]);
     e.target.value = '';
   };
-
-  // Habit pillars for the habit-building section
-  const HABIT_PILLARS = [
-    { icon: '🥗', label: 'Nutrition',  micro: 'Building consistency', days: 7,  total: 10 },
-    { icon: '🚶', label: 'Movement',   micro: 'Steps increasing',     days: 9,  total: 14 },
-    { icon: '💧', label: 'Hydration',  micro: 'On track',             days: 8,  total: 14 },
-    { icon: '😴', label: 'Sleep',      micro: 'Improving',            days: 6,  total: 14 },
-    { icon: '🔄', label: 'Routine',    micro: 'Becoming automatic',   days: 10, total: 14 },
-  ];
 
   return (
     <>
@@ -3204,16 +3729,9 @@ function Month2Content() {
         .m2-dt-story-workspace { display: grid; grid-template-columns: 70fr 30fr; gap: 40px; align-items: start; }
         .m2-dt-story-right { position: sticky; top: 88px; display: flex; flex-direction: column; gap: 20px; }
 
-        /* Execution center */
-        .m2-dt-exec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
-
-        /* Results */
-        .m2-dt-results-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-        .m2-dt-wins-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-
-        /* Focus gallery */
-        .m2-dt-focus-gallery { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
-        .m2-dt-focus-gallery > div { width: unset !important; flex-shrink: unset !important; }
+        /* Foundations workspace — 65/35 */
+        .m2-dt-foundations-workspace { display: grid; grid-template-columns: 65fr 35fr; gap: 32px; align-items: start; }
+        .m2-dt-foundations-right { display: flex; flex-direction: column; gap: 20px; }
       }
 
       @media (min-width: 1400px) {
@@ -3287,182 +3805,79 @@ function Month2Content() {
       <div className="m2-mobile-only">
       <MonthTransformationStory monthNum={2} uploadedPhotos={photos} onUpload={handleFileChange} fileRef={fileInputRef} />
       </div>
+      {/* ── DAILY OPERATIONS (mobile Month 2) ── */}
+      <div className="m2-mobile-only">
+        <DailyOperationsSection monthNum={2} />
+      </div>
       {/* ── BIOMARKER PROGRESS SHOWCASE (mobile Month 2) ── */}
       <div className="m2-mobile-only">
         <BiomarkerProgressShowcase />
       </div>
-      <div className="m2-mobile-only" style={{ padding: '0 24px', display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '24px' }}>
 
-        {/* Desktop: Mission + Habits 2-col */}
-        <div className="m2-mission-habits-grid">
+      {/* ── 4 + 5. FOUNDATIONS + MONTH 3 PREVIEW (mobile) ── */}
+      <div className="m2-mobile-only" style={{ padding: '24px 24px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
         <div>
-        {/* ── 4. TODAY'S MISSION ── */}
-        <div>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '4px' }}>Today&apos;s Mission</p>
-          <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '18px' }}>Three things. That&apos;s it.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {[
-              { icon: '🥗', label: 'Log all meals',      done: true },
-              { icon: '🚶', label: 'Reach 7,000 steps',  done: false },
-              { icon: '💧', label: 'Drink 2L water',      done: false },
-            ].map((item, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: '16px',
-                background: item.done ? 'rgba(107,143,113,0.07)' : '#fff',
-                border: `1px solid ${item.done ? 'rgba(107,143,113,0.2)' : 'var(--color-border)'}`,
-                borderRadius: '18px', padding: '18px 20px',
-                boxShadow: item.done ? 'none' : '0 2px 10px rgba(0,0,0,0.05)',
-              }}>
-                <div style={{
-                  width: '44px', height: '44px', borderRadius: '14px', flexShrink: 0,
-                  background: item.done ? 'var(--color-sage)' : 'var(--color-surface)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: item.done ? '0' : '22px',
-                }}>
-                  {item.done
-                    ? <svg width="18" height="14" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                    : item.icon}
-                </div>
-                <p style={{ fontSize: '15px', fontWeight: item.done ? 400 : 700, color: item.done ? 'var(--color-muted)' : 'var(--color-ink)', textDecoration: item.done ? 'line-through' : 'none', flex: 1 }}>
-                  {item.label}
-                </p>
-                {!item.done && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'rgba(107,143,113,0.3)', flexShrink: 0 }} />}
-              </div>
-            ))}
+          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '6px' }}>Month 2 · Foundations</p>
+          <p style={{ fontSize: '20px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: '4px' }}>Your Foundations Are Taking Shape</p>
+          <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.55 }}>Consistency is building confidence.</p>
+        </div>
+
+        {/* Strongest Foundation card */}
+        <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', height: '220px', boxShadow: '0 6px 24px rgba(0,0,0,0.16)' }}>
+          <img src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=85" alt="Daily Movement"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 35%' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(7,18,10,0.94) 0%, rgba(0,0,0,0) 55%)' }} />
+          <div style={{ position: 'absolute', inset: 0, padding: '18px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: '8px' }}>
+            <p style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(168,197,172,0.70)', textTransform: 'uppercase' as const, letterSpacing: '0.14em' }}>Your Strongest Foundation</p>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(107,143,113,0.25)', backdropFilter: 'blur(10px)', borderRadius: '18px', padding: '4px 11px', border: '1px solid rgba(168,197,172,0.28)', alignSelf: 'flex-start' }}>
+              <span style={{ fontSize: '13px' }}>🚶</span>
+              <span style={{ fontSize: '12px', fontWeight: 800, color: '#fff' }}>Daily Movement</span>
+            </div>
+            <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1.25 }}>Movement is becoming part of your routine.</p>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {['14 day consistency', '82% adherence'].map((pill, i) => (
+                <span key={i} style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)', borderRadius: '16px', padding: '3px 10px', fontSize: '10px', fontWeight: 700, color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}>{pill}</span>
+              ))}
+            </div>
           </div>
         </div>
 
-        </div>{/* end mission col */}
-        <div>
-        {/* ── 4. HABIT PILLARS ── goalChecked state drives completion ── */}
-        <div>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '4px' }}>Building Your Habits</p>
-          <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '18px' }}>Five pillars. All improving.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {HABIT_PILLARS.map((pillar, i) => {
-              const pct = Math.round((pillar.days / pillar.total) * 100);
-              const isGoalDone = goalChecked[i] ?? false;
-              return (
-                <button
-                  key={i}
-                  onClick={() => setGoalChecked(prev => prev.map((v, idx) => idx === i ? !v : v))}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '14px',
-                    background: isGoalDone ? 'rgba(107,143,113,0.07)' : '#fff',
-                    border: `1px solid ${isGoalDone ? 'rgba(107,143,113,0.2)' : 'var(--color-border)'}`,
-                    borderRadius: '18px', padding: '16px 18px',
-                    cursor: 'pointer', textAlign: 'left' as const, width: '100%',
-                    boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <div style={{ width: '44px', height: '44px', borderRadius: '14px', flexShrink: 0, background: isGoalDone ? 'var(--color-sage)' : 'var(--color-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isGoalDone ? '0' : '22px', transition: 'all 0.15s ease' }}>
-                    {isGoalDone
-                      ? <svg width="18" height="14" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      : pillar.icon}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-                      <p style={{ fontSize: '14px', fontWeight: 700, color: isGoalDone ? 'var(--color-muted)' : 'var(--color-ink)', textDecoration: isGoalDone ? 'line-through' : 'none' }}>{pillar.label}</p>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-sage)' }}>{pct}%</span>
-                    </div>
-                    <div style={{ height: '4px', background: 'var(--color-border)', borderRadius: '2px', overflow: 'hidden', marginBottom: '4px' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, background: 'var(--color-sage)', borderRadius: '2px', transition: 'width 0.3s ease' }} />
-                    </div>
-                    <p style={{ fontSize: '11px', color: 'var(--color-muted)' }}>{pillar.micro} · {pillar.days} of {pillar.total} days</p>
-                  </div>
-                </button>
-              );
-            })}
+        {/* This Week's Focus */}
+        <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: '18px', padding: '18px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <p style={{ fontSize: '9px', fontWeight: 700, color: '#C49A26', textTransform: 'uppercase' as const, letterSpacing: '0.12em' }}>This Week&apos;s Focus</p>
+            <span style={{ fontSize: '20px' }}>🥚</span>
           </div>
+          <p style={{ fontSize: '15px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '6px' }}>Protein At Breakfast</p>
+          <p style={{ fontSize: '12px', color: 'var(--color-muted)', lineHeight: 1.55 }}>Adding protein early in the day can improve satiety, energy and recovery.</p>
         </div>
 
-        </div>{/* end habits col */}
-        </div>{/* end mission-habits grid */}
-
-        {/* Desktop: Progress + Focus areas 2-col */}
-        <div className="m2-progress-focus-grid">
-        <div>
-        {/* ── 5. YOUR PROGRESS SO FAR ── */}
-        <div>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '4px' }}>Your Progress So Far</p>
-          <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '18px' }}>Everything is moving.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {[
-              { icon: '⚖️', label: 'Weight',    value: '↓ Trending',  sub: 'down this week',    color: 'var(--color-sage)',        bg: 'rgba(107,143,113,0.07)',  border: 'rgba(107,143,113,0.15)' },
-              { icon: '📏', label: 'Waist',     value: '↓ Reducing',  sub: 'week on week',      color: 'var(--color-sage)',        bg: 'rgba(107,143,113,0.07)',  border: 'rgba(107,143,113,0.15)' },
-              { icon: '⚡', label: 'Energy',    value: '↑ Improving', sub: '83% feel better',   color: '#C49A26',                  bg: 'rgba(212,168,67,0.07)',   border: 'rgba(212,168,67,0.18)' },
-              { icon: '🚶', label: 'Movement',  value: '↑ Increasing', sub: '+900 steps/day',   color: 'var(--color-terracotta)',  bg: 'rgba(200,96,74,0.06)',    border: 'rgba(200,96,74,0.15)' },
-            ].map((item, i) => (
-              <div key={i} style={{ background: item.bg, border: `1px solid ${item.border}`, borderRadius: '20px', padding: '18px 16px' }}>
-                <div style={{ fontSize: '24px', marginBottom: '10px' }}>{item.icon}</div>
-                <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '4px' }}>{item.label}</p>
-                <p style={{ fontSize: '17px', fontWeight: 800, color: item.color, letterSpacing: '-0.02em', lineHeight: 1, marginBottom: '3px' }}>{item.value}</p>
-                <p style={{ fontSize: '11px', color: 'var(--color-muted)' }}>{item.sub}</p>
-              </div>
-            ))}
+        {/* Coach Insight */}
+        <div style={{ background: 'rgba(107,143,113,0.06)', border: '1px solid rgba(107,143,113,0.16)', borderRadius: '18px', padding: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '2px solid rgba(107,143,113,0.30)' }}>
+              <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=80&q=80" alt="Dr. Ananya" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+            <div>
+              <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-ink)' }}>Dr. Ananya Rao</p>
+              <p style={{ fontSize: '11px', color: 'var(--color-sage)' }}>Your Health Coach</p>
+            </div>
           </div>
+          <p style={{ fontSize: '13px', color: 'var(--color-ink)', lineHeight: 1.6, fontStyle: 'italic' }}>
+            &ldquo;You&apos;ve built excellent momentum with activity. Now let&apos;s focus on meal consistency.&rdquo;
+          </p>
         </div>
 
-        </div>{/* end progress left col */}
-        <div>
-        {/* ── 6. THIS MONTH'S FOCUS AREAS ── horizontal scroll carousel ── */}
-        <div>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '4px' }}>This Month&apos;s Focus</p>
-          <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '18px' }}>Five pillars of foundation.</p>
-          <div className="m2-focus-carousel" style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px', marginLeft: '-24px', marginRight: '-24px', paddingLeft: '24px', paddingRight: '24px' }}>
-            {[
-              { img: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=600&q=80', emoji: '🥗', title: 'Indian Plate',   take: 'Half veg · Quarter protein' },
-              { img: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=600&q=80', emoji: '🚶', title: 'Daily Movement', take: '6,000 → 8,000 steps' },
-              { img: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&q=80', emoji: '💪', title: 'Strength',       take: 'Two sessions a week' },
-              { img: 'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=600&q=80',    emoji: '💧', title: 'Hydration',      take: '2–3 litres daily' },
-              { img: 'https://images.unsplash.com/photo-1603569283847-aa295f0d016a?w=600&q=80', emoji: '🚫', title: 'Cut Sugar',      take: 'Swap one drink daily' },
-            ].map((card, i) => (
-              <div key={i} style={{ width: '160px', flexShrink: 0, borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.10)', position: 'relative', cursor: 'pointer' }}>
-                <img src={card.img} alt={card.title} style={{ width: '100%', height: '200px', objectFit: 'cover', display: 'block' }} />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.72) 100%)' }} />
-                <div style={{ position: 'absolute', inset: 0, padding: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: '22px', marginBottom: '6px', display: 'block' }}>{card.emoji}</span>
-                  <p style={{ fontSize: '13px', fontWeight: 800, color: '#fff', lineHeight: 1.2, marginBottom: '4px' }}>{card.title}</p>
-                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.75)', lineHeight: 1.4 }}>{card.take}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── 7. SUCCESS PILLARS ── 2×2 icon grid ── */}
-        <div>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '4px' }}>Month 2 Wins Like</p>
-          <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '18px' }}>Four signs you&apos;re succeeding.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {[
-              { icon: '⚖️', label: 'Weight Trend',        sub: 'Improving week-on-week' },
-              { icon: '🚶', label: 'Movement',             sub: 'Steps increasing daily' },
-              { icon: '🍽️', label: 'Meal Consistency',    sub: '3 logs per day' },
-              { icon: '🔄', label: 'Daily Routine',        sub: 'Becoming automatic' },
-            ].map((item, i) => (
-              <div key={i} style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: '20px', padding: '20px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', textAlign: 'center' as const }}>
-                <div style={{ width: '52px', height: '52px', borderRadius: '16px', background: 'rgba(107,143,113,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', margin: '0 auto 12px' }}>{item.icon}</div>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '4px' }}>{item.label}</p>
-                <p style={{ fontSize: '11px', color: 'var(--color-muted)', lineHeight: 1.4 }}>{item.sub}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── 9. MONTH 3 PREVIEW ── */}
-        <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.10)', marginTop: '32px' }}>
-          <img
-            src="https://images.unsplash.com/photo-1541480601022-2308c0f02487?w=800&q=80"
-            alt="Month 3 — Metabolic Correction"
-            style={{ width: '100%', height: '200px', objectFit: 'cover', objectPosition: 'center 30%', display: 'block' }}
-          />
+        {/* Month 3 Preview */}
+        <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.10)' }}>
+          <img src="https://images.unsplash.com/photo-1541480601022-2308c0f02487?w=800&q=80" alt="Month 3 — Metabolic Correction"
+            style={{ width: '100%', height: '200px', objectFit: 'cover', objectPosition: 'center 30%', display: 'block' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.80) 100%)' }} />
           <div style={{ position: 'absolute', inset: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
             <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: '4px' }}>Coming Next</p>
             <p style={{ fontSize: '22px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: '4px' }}>Month 3 · Sleep Better, Feel Better</p>
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px', letterSpacing: '0.01em' }}>Metabolic Correction</p>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>Metabolic Correction</p>
             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.72)', lineHeight: 1.55, marginBottom: '12px' }}>Sleep. Recovery. Blood sugar optimisation.</p>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const }}>
               {['😴 Sleep', '🩸 Blood Sugar', '🌿 Gut Health', '⚡ Recovery'].map((tag, i) => (
@@ -3472,10 +3887,8 @@ function Month2Content() {
           </div>
         </div>
 
-        </div>{/* end focus right col */}
-        </div>{/* end progress-focus grid */}
-
-      </div>{/* end padded body m2-mobile-only */}
+        <div style={{ height: '8px' }} />
+      </div>
 
     {/* ═══════ DESKTOP ═══════ */}
     <div className="m2-desktop-only">
@@ -3531,6 +3944,32 @@ function Month2Content() {
                 </div>
                 <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.40)', marginTop: '7px' }}>47% complete · 16 days remaining</p>
               </motion.div>
+
+              {/* ── Continue Journey CTA ── */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.55, ease: 'easeOut' }}
+                style={{ marginTop: '22px' }}
+              >
+                <a
+                  href="/today?tab=month2"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '9px',
+                    background: '#fff', color: '#1C2B1E',
+                    borderRadius: '12px', padding: '13px 22px',
+                    fontWeight: 800, fontSize: '14px', textDecoration: 'none',
+                    letterSpacing: '-0.01em',
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+                    transition: 'transform 0.18s, box-shadow 0.18s',
+                  }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = '0 6px 20px rgba(0,0,0,0.24)'; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = '0 2px 12px rgba(0,0,0,0.18)'; }}
+                >
+                  Continue Journey
+                  <ChevronRight size={15} strokeWidth={2.5} />
+                </a>
+              </motion.div>
             </div>
           </div>
 
@@ -3565,167 +4004,119 @@ function Month2Content() {
         {/* ── S2: MY TRANSFORMATION STORY ── */}
         <MonthTransformationStory monthNum={2} uploadedPhotos={photos} onUpload={handleFileChange} fileRef={fileInputRef} />
 
+        {/* ── S2c: DAILY OPERATIONS ── */}
+        <DailyOperationsSection monthNum={2} />
+
         {/* ── S2b: BIOMARKER PROGRESS SHOWCASE ── */}
         <BiomarkerProgressShowcase />
 
-        {/* ── S3: TODAY'S EXECUTION CENTER ── */}
-        <div className="m2-dt-section m2-dt-section-white">
-          <div style={{ marginBottom: '40px' }}>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '4px' }}>Your Daily Work</p>
-            <h2 style={{ fontSize: '32px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.04em' }}>Today&apos;s Execution Center</h2>
-          </div>
-          <div className="m2-dt-exec-grid">
+        {/* ── S3: YOUR FOUNDATIONS ARE TAKING SHAPE ── */}
+        <div style={{ background: '#EEF3EF', padding: '56px 64px' }}>
+          <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
 
-            {/* LEFT: Today's Mission */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '11px', background: 'rgba(240,201,106,0.12)', border: '1px solid rgba(240,201,106,0.24)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Target size={17} color="#C49A26" strokeWidth={2} />
-                </div>
-                <div>
-                  <p style={{ fontSize: '10px', fontWeight: 700, color: '#C49A26', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '1px' }}>Today&apos;s Mission</p>
-                  <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>Three things. That&apos;s it.</p>
-                </div>
+            {/* Compact section header */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', marginBottom: '36px' }}>
+              <div>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.14em', marginBottom: '6px' }}>Month 2 · Foundations</p>
+                <h2 style={{ fontSize: '32px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.035em', lineHeight: 1.05 }}>
+                  Your Foundations Are Taking Shape
+                </h2>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {[
-                  { icon: '🥗', label: 'Log all meals', done: true },
-                  { icon: '🚶', label: 'Reach 7,000 steps', done: false },
-                  { icon: '💧', label: 'Drink 2L water', done: false },
-                ].map((item, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '16px', background: item.done ? 'rgba(107,143,113,0.06)' : '#fff', border: `1.5px solid ${item.done ? 'rgba(107,143,113,0.22)' : 'var(--color-border)'}`, borderRadius: '20px', padding: '20px 22px', boxShadow: item.done ? 'none' : '0 2px 12px rgba(0,0,0,0.05)', transition: 'all 0.15s ease' }}>
-                    <div style={{ width: '48px', height: '48px', borderRadius: '15px', flexShrink: 0, background: item.done ? 'var(--color-sage)' : 'var(--color-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: item.done ? '0' : '24px' }}>
-                      {item.done ? <svg width="20" height="16" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg> : item.icon}
-                    </div>
-                    <p style={{ fontSize: '16px', fontWeight: item.done ? 400 : 700, color: item.done ? 'var(--color-muted)' : 'var(--color-ink)', textDecoration: item.done ? 'line-through' : 'none', flex: 1 }}>{item.label}</p>
-                    {item.done
-                      ? <CheckCircle2 size={18} color="var(--color-sage)" />
-                      : <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: 'rgba(107,143,113,0.28)', flexShrink: 0 }} />}
+            </div>
+
+            {/* 65 / 35 workspace */}
+            <div className="m2-dt-foundations-workspace">
+
+              {/* LEFT 65%: Cinematic Foundation Card — compact height */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                style={{ position: 'relative', borderRadius: '24px', overflow: 'hidden', minHeight: '360px', boxShadow: '0 8px 36px rgba(0,0,0,0.18)' }}
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1200&q=90"
+                  alt="Daily Movement"
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 35%' }}
+                />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, rgba(7,23,16,0.50) 0%, rgba(5,16,10,0.18) 45%, rgba(0,0,0,0.02) 70%)' }} />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(7,18,10,0.94) 0%, rgba(0,0,0,0) 52%)' }} />
+
+                <div style={{ position: 'relative', zIndex: 1, height: '100%', minHeight: '360px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '36px 40px' }}>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.65)', textTransform: 'uppercase' as const, letterSpacing: '0.16em', marginBottom: '10px' }}>Your Strongest Foundation</p>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: 'rgba(107,143,113,0.22)', backdropFilter: 'blur(12px)', borderRadius: '20px', padding: '6px 14px', border: '1px solid rgba(168,197,172,0.26)', marginBottom: '14px', alignSelf: 'flex-start' }}>
+                    <span style={{ fontSize: '16px' }}>🚶</span>
+                    <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>Daily Movement</span>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* RIGHT: Building Your Habits */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '11px', background: 'rgba(107,143,113,0.10)', border: '1px solid rgba(107,143,113,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <TrendingUp size={17} color="var(--color-sage)" strokeWidth={2} />
-                </div>
-                <div>
-                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '1px' }}>Building Your Habits</p>
-                  <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>Five pillars. All improving.</p>
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {HABIT_PILLARS.map((pillar, i) => {
-                  const pct = Math.round((pillar.days / pillar.total) * 100);
-                  const isGoalDone = goalChecked[i] ?? false;
-                  return (
-                    <button key={i} onClick={() => setGoalChecked(prev => prev.map((v, idx) => idx === i ? !v : v))}
-                      style={{ display: 'flex', alignItems: 'center', gap: '14px', background: isGoalDone ? 'rgba(107,143,113,0.06)' : '#fff', border: `1.5px solid ${isGoalDone ? 'rgba(107,143,113,0.22)' : 'var(--color-border)'}`, borderRadius: '18px', padding: '16px 20px', cursor: 'pointer', textAlign: 'left' as const, width: '100%', transition: 'all 0.15s ease' }}
-                      onMouseEnter={e => { if (!isGoalDone) (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(107,143,113,0.30)'; }}
-                      onMouseLeave={e => { if (!isGoalDone) (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--color-border)'; }}>
-                      <div style={{ width: '44px', height: '44px', borderRadius: '14px', flexShrink: 0, background: isGoalDone ? 'var(--color-sage)' : 'var(--color-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isGoalDone ? '0' : '22px', transition: 'all 0.15s ease' }}>
-                        {isGoalDone ? <svg width="18" height="14" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg> : pillar.icon}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                          <p style={{ fontSize: '14px', fontWeight: 700, color: isGoalDone ? 'var(--color-muted)' : 'var(--color-ink)', textDecoration: isGoalDone ? 'line-through' : 'none' }}>{pillar.label}</p>
-                          <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--color-sage)' }}>{pct}%</span>
-                        </div>
-                        <div style={{ height: '4px', background: 'var(--color-border)', borderRadius: '2px', overflow: 'hidden', marginBottom: '5px' }}>
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.9, delay: i * 0.08, ease: 'easeOut' }}
-                            style={{ height: '100%', background: 'var(--color-sage)', borderRadius: '2px' }} />
-                        </div>
-                        <p style={{ fontSize: '11px', color: 'var(--color-muted)' }}>{pillar.micro} · {pillar.days} of {pillar.total} days</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── S4: RESULTS DASHBOARD ── */}
-        <div className="m2-dt-section m2-dt-section-stone">
-          <div style={{ marginBottom: '40px' }}>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '4px' }}>The Evidence</p>
-            <h2 style={{ fontSize: '32px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.04em' }}>Your Results So Far</h2>
-          </div>
-
-          {/* Progress metrics — 4-col */}
-          <div style={{ marginBottom: '12px' }}>
-            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '16px' }}>Your Progress So Far · Everything is moving.</p>
-          </div>
-          <div className="m2-dt-results-row" style={{ marginBottom: '40px' }}>
-            {[
-              { icon: '⚖️', label: 'Weight',   value: '↓ Trending',   sub: 'down this week',   color: 'var(--color-sage)',       bg: '#fff', border: 'rgba(107,143,113,0.20)' },
-              { icon: '📏', label: 'Waist',    value: '↓ Reducing',   sub: 'week on week',     color: 'var(--color-sage)',       bg: '#fff', border: 'rgba(107,143,113,0.20)' },
-              { icon: '⚡', label: 'Energy',   value: '↑ Improving',  sub: '83% feel better',  color: '#C49A26',                 bg: '#fff', border: 'rgba(212,168,67,0.24)' },
-              { icon: '🚶', label: 'Movement', value: '↑ Increasing', sub: '+900 steps/day',   color: 'var(--color-terracotta)', bg: '#fff', border: 'rgba(200,96,74,0.20)' },
-            ].map((item, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08, duration: 0.35 }}
-                style={{ background: item.bg, border: `1.5px solid ${item.border}`, borderRadius: '22px', padding: '28px 24px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
-                onMouseEnter={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform = 'translateY(-3px)'; d.style.boxShadow = '0 10px 32px rgba(0,0,0,0.12)'; }}
-                onMouseLeave={e => { const d = e.currentTarget as HTMLDivElement; d.style.transform = 'translateY(0)'; d.style.boxShadow = '0 4px 20px rgba(0,0,0,0.06)'; }}>
-                <div style={{ fontSize: '32px', marginBottom: '16px' }}>{item.icon}</div>
-                <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '6px' }}>{item.label}</p>
-                <p style={{ fontSize: '22px', fontWeight: 900, color: item.color, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '5px' }}>{item.value}</p>
-                <p style={{ fontSize: '12px', color: 'var(--color-muted)' }}>{item.sub}</p>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Wins — 4-col */}
-          <div style={{ marginBottom: '12px' }}>
-            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '16px' }}>Month 2 Wins Like · Four signs you&apos;re succeeding.</p>
-          </div>
-          <div className="m2-dt-wins-row">
-            {[
-              { icon: '⚖️', label: 'Weight Trend',     sub: 'Improving week-on-week' },
-              { icon: '🚶', label: 'Movement',          sub: 'Steps increasing daily' },
-              { icon: '🍽️', label: 'Meal Consistency', sub: '3 logs per day' },
-              { icon: '🔄', label: 'Daily Routine',     sub: 'Becoming automatic' },
-            ].map((item, i) => (
-              <div key={i} style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: '22px', padding: '28px 20px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', textAlign: 'center' as const }}>
-                <div style={{ width: '56px', height: '56px', borderRadius: '18px', background: 'rgba(107,143,113,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', margin: '0 auto 14px' }}>{item.icon}</div>
-                <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '5px' }}>{item.label}</p>
-                <p style={{ fontSize: '11px', color: 'var(--color-muted)', lineHeight: 1.4 }}>{item.sub}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── S5: THIS MONTH'S FOCUS ── */}
-        <div className="m2-dt-section m2-dt-section-dark">
-          <div style={{ marginBottom: '40px' }}>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.65)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '4px' }}>This Month&apos;s Focus</p>
-            <h2 style={{ fontSize: '32px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em' }}>Five pillars of foundation.</h2>
-          </div>
-          <div className="m2-dt-focus-gallery">
-            {[
-              { img: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80', emoji: '🥗', title: 'Indian Plate',   take: 'Half veg · Quarter protein' },
-              { img: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&q=80', emoji: '🚶', title: 'Daily Movement', take: '6,000 → 8,000 steps' },
-              { img: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80', emoji: '💪', title: 'Strength',       take: 'Two sessions a week' },
-              { img: 'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=800&q=80',    emoji: '💧', title: 'Hydration',      take: '2–3 litres daily' },
-              { img: 'https://images.unsplash.com/photo-1603569283847-aa295f0d016a?w=800&q=80', emoji: '🚫', title: 'Cut Sugar',      take: 'Swap one drink daily' },
-            ].map((card, i) => (
-              <motion.div key={i} whileHover={{ y: -6, scale: 1.02 }} style={{ borderRadius: '22px', overflow: 'hidden', cursor: 'pointer', position: 'relative', boxShadow: '0 8px 32px rgba(0,0,0,0.35)' }}>
-                <img src={card.img} alt={card.title} style={{ width: '100%', height: '280px', objectFit: 'cover', display: 'block', transition: 'transform 0.5s ease' }} />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.80) 100%)' }} />
-                <div style={{ position: 'absolute', inset: 0, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: '28px', marginBottom: '8px', display: 'block' }}>{card.emoji}</span>
-                  <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', lineHeight: 1.2, marginBottom: '5px' }}>{card.title}</p>
-                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.72)', lineHeight: 1.4 }}>{card.take}</p>
+                  <h3 style={{ fontSize: '26px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: '10px' }}>
+                    Movement is becoming part of your routine.
+                  </h3>
+                  <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.6, maxWidth: '420px', marginBottom: '18px' }}>
+                    Small actions repeated consistently are creating lasting change.
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, marginBottom: '18px' }}>
+                    {['14 day consistency', '82% adherence', '+900 steps/day'].map((pill, i) => (
+                      <span key={i} style={{ background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(10px)', borderRadius: '16px', padding: '4px 12px', fontSize: '11px', fontWeight: 700, color: '#fff', border: '1px solid rgba(255,255,255,0.14)' }}>{pill}</span>
+                    ))}
+                  </div>
+                  <button style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.20)', borderRadius: '14px', padding: '9px 18px', fontSize: '12px', fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
+                    View Habit Progress <ArrowRight size={12} />
+                  </button>
                 </div>
               </motion.div>
-            ))}
+
+              {/* RIGHT 35%: Coach Insight + This Week's Focus */}
+              <div className="m2-dt-foundations-right">
+
+                {/* Coach Insight */}
+                <motion.div
+                  initial={{ opacity: 0, x: 16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.16, duration: 0.42 }}
+                  style={{ background: 'linear-gradient(135deg, rgba(107,143,113,0.08) 0%, rgba(107,143,113,0.04) 100%)', borderRadius: '22px', padding: '26px', border: '1px solid rgba(107,143,113,0.18)', flex: 1 }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '2px solid rgba(107,143,113,0.32)' }}>
+                      <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=80&q=80" alt="Dr. Ananya" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-ink)' }}>Dr. Ananya Rao</p>
+                      <p style={{ fontSize: '11px', color: 'var(--color-sage)', fontWeight: 500 }}>Your Health Coach</p>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '14px', color: 'var(--color-ink)', lineHeight: 1.65, fontStyle: 'italic' }}>
+                    &ldquo;You&apos;ve built excellent momentum with activity. Now let&apos;s focus on meal consistency to strengthen your foundation.&rdquo;
+                  </p>
+                </motion.div>
+
+                {/* This Week's Focus */}
+                <motion.div
+                  initial={{ opacity: 0, x: 16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.26, duration: 0.42 }}
+                  style={{ background: '#fff', borderRadius: '22px', padding: '26px', border: '1px solid var(--color-border)', boxShadow: '0 3px 18px rgba(0,0,0,0.06)', flex: 1 }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div>
+                      <p style={{ fontSize: '10px', fontWeight: 700, color: '#C49A26', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '5px' }}>This Week&apos;s Focus</p>
+                      <h4 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>Protein At Breakfast</h4>
+                    </div>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'rgba(196,154,38,0.10)', border: '1px solid rgba(196,154,38,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>🥚</div>
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.6, marginBottom: '16px' }}>
+                    Adding protein early in the day improves satiety, energy and metabolic recovery.
+                  </p>
+                  <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(196,154,38,0.09)', border: '1px solid rgba(196,154,38,0.20)', borderRadius: '12px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, color: '#C49A26', cursor: 'pointer' }}>
+                    Learn Why <ArrowRight size={11} />
+                  </button>
+                </motion.div>
+
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ── S6: MONTH 3 PREVIEW ── */}
+        {/* ── S4: MONTH 3 PREVIEW ── */}
         <div style={{ position: 'relative', overflow: 'hidden', minHeight: '400px' }}>
           <img src="https://images.unsplash.com/photo-1541480601022-2308c0f02487?w=1800&q=90" alt="Month 3 — Sleep Better, Feel Better"
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 40%' }} />
@@ -4095,6 +4486,9 @@ function LockedMonthContent({ monthNum }: { monthNum: number }) {
       {/* ── MY TRANSFORMATION STORY — full colour, outside grayscale filter ── */}
       <MonthTransformationStory monthNum={monthNum} />
 
+      {/* ── DAILY OPERATIONS ── */}
+      <DailyOperationsSection monthNum={monthNum} />
+
       {/* ── BIOMARKER PROGRESS SHOWCASE ── */}
       <BiomarkerProgressShowcase />
 
@@ -4290,6 +4684,9 @@ function LockedMonthContent({ monthNum }: { monthNum: number }) {
 
         {/* ── S5: MY TRANSFORMATION STORY — full colour ── */}
         <MonthTransformationStory monthNum={monthNum} />
+
+        {/* ── S5c: DAILY OPERATIONS ── */}
+        <DailyOperationsSection monthNum={monthNum} />
 
         {/* ── S5b: BIOMARKER PROGRESS SHOWCASE ── */}
         <BiomarkerProgressShowcase />
@@ -5285,13 +5682,13 @@ function JourneyIndicatorDesktop({ selectedPhase, onPhaseChange }: { selectedPha
             boxShadow: '0 6px 14px rgba(0,0,0,0.07), 0 24px 56px rgba(0,0,0,0.17), 0 48px 88px rgba(0,0,0,0.07)',
           }}
         >
-          {/* Hero — taller on desktop */}
+          {/* Hero */}
           <div style={{
             position: 'relative',
             background: cd.heroGradient,
-            padding: '40px 40px 48px',
+            padding: '32px 36px 36px',
             overflow: 'hidden',
-            minHeight: '300px',
+            minHeight: '240px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -5316,30 +5713,30 @@ function JourneyIndicatorDesktop({ selectedPhase, onPhaseChange }: { selectedPha
 
             {/* Bottom content */}
             <div style={{ position: 'relative', zIndex: 1 }}>
-              <div style={{ width: '68px', height: '68px', borderRadius: '22px', background: cd.iconBg, border: '1px solid rgba(255,255,255,0.16)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>
-                <cd.IconComponent size={30} color={cd.iconColor} strokeWidth={1.5} />
+              <div style={{ width: '56px', height: '56px', borderRadius: '18px', background: cd.iconBg, border: '1px solid rgba(255,255,255,0.16)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '18px' }}>
+                <cd.IconComponent size={24} color={cd.iconColor} strokeWidth={1.5} />
               </div>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: cd.taglineColor, letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '12px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: cd.taglineColor, letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '10px' }}>
                 Chapter {phase.num} · {phase.journeyLabel}
               </p>
-              <p style={{ fontSize: '44px', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.02, color: '#fff', textShadow: '0 2px 28px rgba(0,0,0,0.30)', marginBottom: '16px' }}>
+              <p style={{ fontSize: '36px', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.05, color: '#fff', textShadow: '0 2px 24px rgba(0,0,0,0.30)', marginBottom: '12px' }}>
                 {phase.title}
               </p>
-              <p style={{ fontSize: '15px', fontWeight: 400, color: cd.taglineColor, lineHeight: 1.68, letterSpacing: '0.01em', maxWidth: '400px' }}>
+              <p style={{ fontSize: '14px', fontWeight: 400, color: cd.taglineColor, lineHeight: 1.6, letterSpacing: '0.01em', maxWidth: '380px' }}>
                 {phase.tagline}
               </p>
             </div>
           </div>
 
           {/* Focus pills */}
-          <div style={{ background: '#fff', borderTop: `1px solid ${theme.tileBorder}`, padding: '22px 40px 28px' }}>
-            <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase' as const, color: 'rgba(0,0,0,0.26)', marginBottom: '14px' }}>
+          <div style={{ background: '#fff', borderTop: `1px solid ${theme.tileBorder}`, padding: '18px 36px 22px' }}>
+            <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase' as const, color: 'rgba(0,0,0,0.26)', marginBottom: '12px' }}>
               Your Focus This Chapter
             </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '9px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '8px' }}>
               {phase.tiles.map(tile => (
-                <div key={tile.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: theme.iconBg, border: `1px solid ${theme.tileBorder}`, borderRadius: '24px', padding: '9px 18px' }}>
-                  <span style={{ fontSize: '16px', lineHeight: 1 }}>{tile.icon}</span>
+                <div key={tile.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: theme.iconBg, border: `1px solid ${theme.tileBorder}`, borderRadius: '24px', padding: '7px 15px' }}>
+                  <span style={{ fontSize: '14px', lineHeight: 1 }}>{tile.icon}</span>
                   <span style={{ fontSize: '12px', fontWeight: 600, color: theme.accent, letterSpacing: '0.01em' }}>{tile.label}</span>
                 </div>
               ))}
@@ -5351,15 +5748,3531 @@ function JourneyIndicatorDesktop({ selectedPhase, onPhaseChange }: { selectedPha
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTIVITY ENGINE — types from hplus-store (imported at top of file)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Assigned meal plan for today (Phase 2: fetch from API)
+interface MealPlanEntry {
+  name: string;
+  items: string[];
+  time: string;
+  badge?: 'recommended' | 'coach-selected';
+  tags?: ('protein' | 'fiber' | 'balanced')[];
+  img?: string;
+}
+
+const TODAYS_MEAL_PLAN: Record<string, MealPlanEntry> = {
+  breakfast: {
+    name: 'Breakfast', items: ['Chole Curry', '2 Millet Rotis'], time: '8:00 AM',
+    badge: 'recommended', tags: ['protein', 'fiber'],
+    img: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=400&q=80',
+  },
+  snack1:    {
+    name: 'Morning Snack', items: ['Soaked Walnuts', 'Almonds (10)'], time: '11:00 AM',
+    badge: 'coach-selected', tags: ['protein'],
+    img: 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=400&q=80',
+  },
+  lunch:     {
+    name: 'Lunch', items: ['Dal Khichdi', 'Raita', 'Salad'], time: '1:00 PM',
+    badge: 'recommended', tags: ['balanced', 'fiber'],
+    img: 'https://images.unsplash.com/photo-1546833998-877b37c2e5c6?w=400&q=80',
+  },
+  snack2:    {
+    name: 'Evening Snack', items: ['Greek Yogurt', 'Cucumber Slices'], time: '4:30 PM',
+    badge: 'coach-selected', tags: ['protein'],
+    img: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&q=80',
+  },
+  dinner:    {
+    name: 'Dinner', items: ['Grilled Paneer', 'Brown Rice', 'Stir-fried Veggies'], time: '7:30 PM',
+    badge: 'recommended', tags: ['protein', 'balanced'],
+    img: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=400&q=80',
+  },
+};
+
+const NEXT_MEAL_KEY = 'lunch'; // Phase 2: compute from current time
+
+// Meal history — last 20 logged (Phase 2: fetch from API / localStorage)
+interface MealHistoryEntry {
+  name: string;
+  lastLogged: string; // display string
+  slot: string;
+}
+const MEAL_HISTORY: MealHistoryEntry[] = [
+  { name: 'Pumpkin Thepla + Mint Chutney',         lastLogged: 'Yesterday',   slot: 'breakfast' },
+  { name: 'Vegetable Upma + Flax Seeds',            lastLogged: '2 days ago',  slot: 'breakfast' },
+  { name: 'Curd + Sprouts Thalipeeth',              lastLogged: '3 days ago',  slot: 'lunch' },
+  { name: 'Moong Dal Chilla + Green Chutney',       lastLogged: '3 days ago',  slot: 'breakfast' },
+  { name: 'Palak Soup + Multigrain Bread',          lastLogged: '4 days ago',  slot: 'dinner' },
+  { name: 'Paneer Bhurji + 2 Rotis',               lastLogged: '4 days ago',  slot: 'dinner' },
+  { name: 'Methi Paratha + Pickle',                 lastLogged: '5 days ago',  slot: 'breakfast' },
+  { name: 'Chickpea Salad Bowl',                   lastLogged: '5 days ago',  slot: 'lunch' },
+  { name: 'Rajma Chawal + Salad',                  lastLogged: '6 days ago',  slot: 'lunch' },
+  { name: 'Masoor Dal + Brown Rice + Sabzi',        lastLogged: '6 days ago',  slot: 'dinner' },
+  { name: 'Banana + Peanut Butter',                lastLogged: '1 week ago',  slot: 'snack1' },
+  { name: 'Oats Porridge + Berries',               lastLogged: '1 week ago',  slot: 'breakfast' },
+  { name: 'Kadhi + Rice',                          lastLogged: '1 week ago',  slot: 'lunch' },
+  { name: 'Sprouts Chaat',                         lastLogged: '8 days ago',  slot: 'snack2' },
+  { name: 'Egg White Omelette + Toast',            lastLogged: '9 days ago',  slot: 'breakfast' },
+  { name: 'Vegetable Pulao + Raita',               lastLogged: '10 days ago', slot: 'dinner' },
+  { name: 'Mixed Nuts + Dark Chocolate',           lastLogged: '10 days ago', slot: 'snack2' },
+  { name: 'Sambar + Idli (2)',                     lastLogged: '11 days ago', slot: 'breakfast' },
+  { name: 'Grilled Chicken + Quinoa',              lastLogged: '11 days ago', slot: 'dinner' },
+  { name: 'Poha + Coconut Chutney',                lastLogged: '12 days ago', slot: 'breakfast' },
+];
+
+// Meal slot config
+interface MealSlotConfig {
+  label: string;
+  emoji: string;
+  time: string;
+  accent: string;
+  bg: string;
+  border: string;
+  img: string;
+}
+const MEAL_SLOTS: Record<string, MealSlotConfig> = {
+  breakfast: {
+    label: 'Breakfast', emoji: '🌅', time: '7–9 AM',
+    accent: '#D4A843', bg: 'rgba(212,168,67,0.12)', border: 'rgba(212,168,67,0.35)',
+    img: 'https://images.unsplash.com/photo-1484723091739-30a097e8f929?w=300&q=80',
+  },
+  snack1: {
+    label: 'Morning Snack', emoji: '🌿', time: '10–11 AM',
+    accent: '#6B8F71', bg: 'rgba(107,143,113,0.12)', border: 'rgba(107,143,113,0.35)',
+    img: 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=300&q=80',
+  },
+  lunch: {
+    label: 'Lunch', emoji: '☀️', time: '12–2 PM',
+    accent: '#E8A030', bg: 'rgba(232,160,48,0.12)', border: 'rgba(232,160,48,0.35)',
+    img: 'https://images.unsplash.com/photo-1546833998-877b37c2e5c6?w=300&q=80',
+  },
+  snack2: {
+    label: 'Evening Snack', emoji: '🍵', time: '4–5 PM',
+    accent: '#A87BB0', bg: 'rgba(168,123,176,0.12)', border: 'rgba(168,123,176,0.35)',
+    img: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=300&q=80',
+  },
+  dinner: {
+    label: 'Dinner', emoji: '🌙', time: '7–9 PM',
+    accent: '#7B8FC8', bg: 'rgba(123,143,200,0.12)', border: 'rgba(123,143,200,0.35)',
+    img: 'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=300&q=80',
+  },
+};
+
+// Coaching messages per adherence level
+const ADHERENCE_MESSAGES: Record<string, string> = {
+  exact:   'Consistent meals are strongly linked to improved glucose control.',
+  mostly:  'Staying close to your plan supports steady metabolic improvement.',
+  changes: 'Every mindful choice — even modified — builds the habit.',
+  custom:  'Logging what you actually eat gives your coach the full picture.',
+};
+
+// Points per adherence level
+const ADHERENCE_POINTS: Record<string, number> = {
+  exact: 2, mostly: 2, changes: 1, custom: 1,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION LOGGING MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+
+type MealAdherenceLevel = 'exact' | 'mostly' | 'changes' | 'custom';
+type MealChangeTag = 'different-protein' | 'different-carb' | 'different-veg' | 'added-item' | 'removed-item' | 'other';
+
+type LoggingSheet =
+  | { type: 'closed' }
+  | {
+      type: 'meal';
+      step: 'slot-select' | 'plan-meal' | 'history-meal' | 'custom-meal' | 'adherence' | 'adherence-changes' | 'portion' | 'components' | 'success';
+      selectedSlot?: string;
+      selectedMeal?: string;       // key into TODAYS_MEAL_PLAN
+      historyMeal?: string;        // name string from MEAL_HISTORY
+      customMealName?: string;
+      customPortion?: string;      // '25' | '50' | '75' | '100' | custom string
+      customUnit?: string;
+      adherenceLevel?: MealAdherenceLevel;
+      changeTags?: MealChangeTag[];
+      portionPct?: number;         // 25 | 50 | 75 | 100
+      skippedComponents?: string[];
+      logDate?: string;            // ISO date 'YYYY-MM-DD'
+      logTime?: string;            // 'HH:MM' 24h
+      notes?: string;
+      earnedPoints?: number;
+      altDescription?: string;     // legacy compat
+    }
+  | { type: 'exercise'; step: 'pick' | 'duration' | 'intensity' | 'reflection' | 'success'; activity?: string; duration?: number; intensity?: string; feeling?: string }
+  | { type: 'water'; step: 'pick' | 'context' | 'success'; amount?: number; context?: string }
+  | { type: 'sleep'; step: 'bedtime' | 'waketime' | 'quality' | 'interruptions' | 'sunlight-prompt' | 'success'; bedtime?: string; waketime?: string; quality?: string; interruptions?: number; morningLight?: boolean }
+  | { type: 'sunlight'; step: 'pick' | 'success'; minutes?: number }
+  | { type: 'meditation'; step: 'pick' | 'log-duration' | 'feeling' | 'session-prep' | 'active' | 'post-feeling' | 'success'; minutes?: number; feeling?: string; postFeeling?: string; sessionType?: 'log' | 'live' }
+  | { type: 'mood'; step: 'pick' | 'influences' | 'reflection' | 'success'; mood?: number; moodLabel?: string; influences?: string[] }
+  | { type: 'biomarker'; step: 'pick' | 'glucose-context' | 'glucose-value' | 'bp-entry' | 'weight-value' | 'weight-timing' | 'waist-value' | 'success'; metric?: string; value?: string; value2?: string; context?: string; timing?: string };
+
+interface ActionLoggingModalProps {
+  sheet: LoggingSheet;
+  setSheet: React.Dispatch<React.SetStateAction<LoggingSheet>>;
+  hplus: HPlusEngineState;
+  setHplus: React.Dispatch<React.SetStateAction<HPlusEngineState>>;
+  categoryProgress: CategoryProgress[];
+  setCategoryProgress: React.Dispatch<React.SetStateAction<CategoryProgress[]>>;
+  onLogged: (cat: ActivityCategory, points: number) => void;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION LOGGING MODAL — premium cinematic modal experience
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Card images for the carousel
+const ACTION_CARD_IMAGES: Record<ActivityCategory | 'nudges', string> = {
+  meal:       'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=85',
+  exercise:   'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=85',
+  water:      'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=800&q=85',
+  sleep:      'https://images.unsplash.com/photo-1631157769375-b15a86e0eb64?w=800&q=85',
+  sunlight:   'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=85',
+  meditation: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&q=85',
+  mood:       'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&q=85',
+  biomarker:  'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800&q=85',
+  nudges:     'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&q=85',
+};
+
+// Exercise activity images
+const EXERCISE_IMAGES: Record<string, string> = {
+  Walk:       'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=600&q=80',
+  Strength:   'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600&q=80',
+  Yoga:       'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&q=80',
+  Cardio:     'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=600&q=80',
+  Sports:     'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=600&q=80',
+  Cycling:    'https://images.unsplash.com/photo-1534787238916-9ba6764efd4f?w=600&q=80',
+  Swimming:   'https://images.unsplash.com/photo-1530549387789-4c1017266635?w=600&q=80',
+  Stretching: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600&q=80',
+};
+
+// Biomarker images
+const BIOMARKER_IMAGES: Record<string, string> = {
+  glucose:  'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=600&q=80',
+  bp:       'https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?w=600&q=80',
+  weight:   'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&q=80',
+  waist:    'https://images.unsplash.com/photo-1520877880798-5ee004e3f11e?w=600&q=80',
+};
+
+const ENCOURAGEMENTS = [
+  'Consistency builds transformation.',
+  'Every healthy choice compounds.',
+  'Small actions. Big transformation.',
+  'You\'re building real momentum.',
+  'Keep going. It\'s working.',
+  'Progress is a daily practice.',
+];
+
+function ActionLoggingModal({ sheet, setSheet, hplus, setHplus, categoryProgress, setCategoryProgress, onLogged }: ActionLoggingModalProps) {
+  const [bioValue, setBioValue] = useState('');
+  const [bioValue2, setBioValue2] = useState('');
+  const [bioNotes, setBioNotes] = useState('');
+  // Numeric state for premium ± selectors (biomarkers)
+  const [bioNumVal, setBioNumVal] = useState(700);   // stored as ×10 for one decimal: 700 = 70.0 kg
+  const [bioNum2Val, setBioNum2Val] = useState(800);  // same — waist cm ×1, glucose mg/dL ×1, bp ×1
+  const bioLPRef = useRef<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>(null);
+  const bioLP2Ref = useRef<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>(null);
+  const [customMealName, setCustomMealName] = useState('');
+  const [customUnit, setCustomUnit] = useState('Bowl');
+  const [customPortion, setCustomPortion] = useState('');
+  const [mealNotes, setMealNotes] = useState('');
+  const [selectedChangeTags, setSelectedChangeTags] = useState<MealChangeTag[]>([]);
+  const [skippedComponents, setSkippedComponents] = useState<string[]>([]);
+  const [moodInfluences, setMoodInfluences] = useState<string[]>([]);
+  const [moodReflection, setMoodReflection] = useState('');
+  const [exerciseDuration, setExerciseDuration] = useState(30);
+  const [waterGlasses, setWaterGlasses] = useState(1);
+  const [sunlightMinutes, setSunlightMinutes] = useState(10);
+  const sunlightLongPressRef = useRef<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>(null);
+  const [meditationMinutes, setMeditationMinutes] = useState(10);
+  const [meditationSecsLeft, setMeditationSecsLeft] = useState(600);
+  const [meditationPaused, setMeditationPaused] = useState(false);
+  const [meditationPromptIdx, setMeditationPromptIdx] = useState(0);
+  const [breathPhase, setBreathPhase] = useState<'inhale' | 'exhale'>('inhale');
+  const meditationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const meditationBreathRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const meditationLongPressRef = useRef<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>(null);
+  const longPressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dragStartY = useRef<number | null>(null);
+  const dragStartVal = useRef<number>(30);
+  const [sleepBedtime, setSleepBedtime] = useState('10:30 PM');
+  const [sleepWaketime, setSleepWaketime] = useState('6:30 AM');
+  const bedtimeInputRef = useRef<HTMLInputElement>(null);
+  const waketimeInputRef = useRef<HTMLInputElement>(null);
+  // logDate: ISO string 'YYYY-MM-DD', defaults to today
+  const [logDate, setLogDate] = useState<string>(() => {
+    const now = new Date();
+    return now.toISOString().slice(0, 10);
+  });
+  // logTime: 'HH:MM' (24h, for native <input type="time">)
+  const [logTime, setLogTime] = useState(() => {
+    const now = new Date();
+    const h = now.getHours().toString().padStart(2, '0');
+    const m = now.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  });
+  const isOpen = sheet.type !== 'closed';
+
+  const close = () => {
+    setSheet({ type: 'closed' });
+    setBioValue('');
+    setBioValue2('');
+    setBioNotes('');
+    setBioNumVal(700);
+    setBioNum2Val(800);
+    if (bioLPRef.current) { clearInterval(bioLPRef.current as unknown as ReturnType<typeof setInterval>); clearTimeout(bioLPRef.current as unknown as ReturnType<typeof setTimeout>); bioLPRef.current = null; }
+    if (bioLP2Ref.current) { clearInterval(bioLP2Ref.current as unknown as ReturnType<typeof setInterval>); clearTimeout(bioLP2Ref.current as unknown as ReturnType<typeof setTimeout>); bioLP2Ref.current = null; }
+    setCustomMealName('');
+    setCustomUnit('Bowl');
+    setCustomPortion('');
+    setMealNotes('');
+    setSelectedChangeTags([]);
+    setSkippedComponents([]);
+    setMoodInfluences([]);
+    setMoodReflection('');
+    setSleepBedtime('10:30 PM');
+    setSleepWaketime('6:30 AM');
+    setExerciseDuration(30);
+    setWaterGlasses(1);
+    setSunlightMinutes(10);
+    setMeditationMinutes(10);
+    setMeditationSecsLeft(600);
+    setMeditationPaused(false);
+    setMeditationPromptIdx(0);
+    setBreathPhase('inhale');
+    if (meditationTimerRef.current) { clearInterval(meditationTimerRef.current); meditationTimerRef.current = null; }
+    if (meditationBreathRef.current) { clearInterval(meditationBreathRef.current); meditationBreathRef.current = null; }
+    const now = new Date();
+    setLogDate(now.toISOString().slice(0, 10));
+    setLogTime(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+  };
+
+  const awardPoints = (cat: ActivityCategory, pts: number, label?: string, value?: string) => {
+    onLogged(cat, pts);
+    void setHplus; void setCategoryProgress;
+    void label; void value;
+  };
+
+  if (!isOpen) return null;
+
+  const encouragement = ENCOURAGEMENTS[hplus.score % ENCOURAGEMENTS.length] ?? ENCOURAGEMENTS[0];
+
+  // ─── SHARED FRAMEWORK COMPONENTS ─────────────────────────────────────────
+
+  // StepIndicator — unified progress bar used by every flow
+  const StepIndicator = ({ current, total, accentColor }: { current: number; total: number; accentColor?: string }) => {
+    const accent = accentColor ?? '#6B8F71';
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 24px 0' }}>
+        {Array.from({ length: total }).map((_, i) => (
+          <div key={i} style={{ flex: 1, height: '3px', borderRadius: '2px', background: i < current ? accent : 'rgba(255,255,255,0.1)', transition: 'background 0.3s' }} />
+        ))}
+        <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', marginLeft: '6px', flexShrink: 0 }}>
+          {current}/{total}
+        </span>
+      </div>
+    );
+  };
+
+  // HeroImageBand — persistent hero used on every step of every flow
+  const HeroImageBand = ({ imgSrc, label, sublabel, accentColor, coachNote }: { imgSrc: string; label: string; sublabel?: string; accentColor?: string; coachNote?: string }) => (
+    <div style={{ position: 'relative', height: '180px', overflow: 'hidden', flexShrink: 0 }}>
+      <img src={imgSrc} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 35%' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(8,18,12,0.82) 100%)' }} />
+      <div style={{ position: 'absolute', bottom: '18px', left: '28px', right: '28px' }}>
+        {sublabel && <p style={{ fontSize: '10px', fontWeight: 700, color: accentColor ? `${accentColor}CC` : 'rgba(168,197,172,0.75)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '3px' }}>{sublabel}</p>}
+        <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>{label}</h3>
+        {coachNote && <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.55)', marginTop: '4px', lineHeight: 1.4, fontStyle: 'italic' }}>{coachNote}</p>}
+      </div>
+    </div>
+  );
+
+  // ── ActivityDateTimeSelector — universal date/time picker for every logging flow ──
+  // Helpers: format ISO date for display, compute today/yesterday ISO strings
+  const todayISO = (() => { const d = new Date(); return d.toISOString().slice(0, 10); })();
+  const yesterdayISO = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+  const formatDateDisplay = (iso: string) => {
+    const [y, mo, day] = iso.split('-').map(Number);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[(mo ?? 1) - 1]} ${day}, ${y}`;
+  };
+  const formatTimeDisplay = (hhmm: string) => {
+    const [hStr, mStr] = hhmm.split(':');
+    const h = parseInt(hStr ?? '0');
+    const m = mStr ?? '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${h12}:${m} ${ampm}`;
+  };
+
+  // LastLoggedBar — shows historical context only (not KPI counts or targets)
+  const LastLoggedBar = ({ text }: { text: string }) => (
+    <div style={{ padding: '10px 24px 0' }}>
+      <p style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic', margin: 0 }}>{text}</p>
+    </div>
+  );
+
+  // ActivityDateTimeSelector — two pill selectors: date + time
+  const ActivityDateTimeSelector = () => (
+    <div style={{ display: 'flex', gap: '8px', padding: '12px 24px 0' }}>
+      {/* Date selector */}
+      <div style={{ position: 'relative', flex: 1 }}>
+        <label style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '10px 14px', cursor: 'pointer', overflow: 'hidden' }}>
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0 }}>
+            <rect x="1" y="2.5" width="11" height="9.5" rx="2" stroke="rgba(255,255,255,0.45)" strokeWidth="1.1"/>
+            <path d="M4 1v3M9 1v3M1 6h11" stroke="rgba(255,255,255,0.45)" strokeWidth="1.1" strokeLinecap="round"/>
+          </svg>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.75)', flex: 1 }}>
+            {logDate === todayISO ? 'Today' : logDate === yesterdayISO ? 'Yesterday' : formatDateDisplay(logDate)}
+          </span>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+            <path d="M2 3.5l3 3 3-3" stroke="rgba(255,255,255,0.35)" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+          {/* Native date input — hidden but drives the picker */}
+          <input
+            type="date"
+            value={logDate}
+            max={todayISO}
+            onChange={e => setLogDate(e.target.value || todayISO)}
+            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+          />
+        </label>
+      </div>
+      {/* Time selector */}
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        <label style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '10px 14px', cursor: 'pointer', overflow: 'hidden' }}>
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0 }}>
+            <circle cx="6.5" cy="6.5" r="5.5" stroke="rgba(255,255,255,0.45)" strokeWidth="1.1"/>
+            <path d="M6.5 3.5V6.5l2 1.5" stroke="rgba(255,255,255,0.45)" strokeWidth="1.1" strokeLinecap="round"/>
+          </svg>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.75)', whiteSpace: 'nowrap' as const }}>
+            {formatTimeDisplay(logTime)}
+          </span>
+          <input
+            type="time"
+            value={logTime}
+            onChange={e => setLogTime(e.target.value || logTime)}
+            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+          />
+        </label>
+      </div>
+    </div>
+  );
+
+  // Keep SharedDateTimeBar as alias for backward compat with meal steps that use it
+  const SharedDateTimeBar = () => <ActivityDateTimeSelector />;
+  void LastLoggedBar; // used selectively
+
+  // SuccessScreen — unified richly-tailored success experience
+  const SuccessScreen = ({
+    points, label, subtitle, details,
+  }: {
+    points: number;
+    label?: string;
+    subtitle?: string;
+    details?: Array<{ icon: string; label: string; value: string }>;
+  }) => {
+    useEffect(() => {
+      const t = setTimeout(close, 3200);
+      return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    return (
+      <div style={{ position: 'relative', minHeight: '420px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '44px 36px', textAlign: 'center' as const, overflow: 'hidden' }}>
+        <motion.div animate={{ scale: [1, 1.15, 1], opacity: [0.25, 0.5, 0.25] }} transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: '340px', height: '340px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(107,143,113,0.22) 0%, transparent 65%)', pointerEvents: 'none' }} />
+        <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.35, 0.15] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: '220px', height: '220px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,168,67,0.18) 0%, transparent 65%)', pointerEvents: 'none' }} />
+
+        <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 300 }}
+          style={{ width: '76px', height: '76px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(107,143,113,0.28) 0%, rgba(107,143,113,0.1) 100%)', border: '1.5px solid rgba(107,143,113,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '22px', position: 'relative', zIndex: 1, boxShadow: '0 0 48px rgba(107,143,113,0.35)' }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#6B8F71" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14, duration: 0.38 }} style={{ position: 'relative', zIndex: 1, width: '100%' }}>
+          {label && <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(168,197,172,0.8)', letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: '8px' }}>✓ {label}</p>}
+
+          {/* Tailored detail rows */}
+          {details && details.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' as const, marginBottom: '20px' }}>
+              {details.map((d, i) => (
+                <div key={i} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', padding: '10px 16px', minWidth: '80px' }}>
+                  <p style={{ fontSize: '18px', margin: '0 0 2px', lineHeight: 1 }}>{d.icon}</p>
+                  <p style={{ fontSize: '16px', fontWeight: 900, color: '#fff', margin: '0 0 2px', letterSpacing: '-0.02em' }}>{d.value}</p>
+                  <p style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{d.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p style={{ fontSize: '52px', fontWeight: 900, color: '#D4A843', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '6px' }}>+{points} H+</p>
+          <p style={{ fontSize: '18px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', marginBottom: '8px' }}>
+            {hplus.score - points}&thinsp;<span style={{ color: 'rgba(255,255,255,0.28)' }}>→</span>&thinsp;<span style={{ color: '#D4A843' }}>{hplus.score}</span>
+          </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.22)', borderRadius: '20px', padding: '5px 14px', marginBottom: subtitle ? '18px' : '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(212,168,67,0.9)' }}>🔥 {hplus.streak}-day streak</span>
+          </div>
+          {subtitle && <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, fontStyle: 'italic', maxWidth: '380px', margin: '0 auto' }}>&ldquo;{subtitle}&rdquo;</p>}
+        </motion.div>
+      </div>
+    );
+  };
+
+  // ── renderContent by type ──────────────────────────────────────────────────
+  const renderContent = () => {
+    // ─── MEAL ─────────────────────────────────────────────────────────────────
+    if (sheet.type === 'meal') {
+
+      // Meal flow uses ActivityDateTimeSelector — backStep navigation is now handled by the unified modal header
+      const DateTimeBar = (_props: { backStep?: string }) => <ActivityDateTimeSelector />;
+
+      // ── Success ──────────────────────────────────────────────────────────────
+      if (sheet.step === 'success') {
+        const loggedMeal = sheet.selectedMeal ? TODAYS_MEAL_PLAN[sheet.selectedMeal] : undefined;
+        const histMeal = sheet.historyMeal;
+        const customName = sheet.customMealName;
+        const mealLabel = loggedMeal ? loggedMeal.name : histMeal ?? customName ?? 'Meal';
+        const adherence = sheet.adherenceLevel;
+        const pts = sheet.earnedPoints ?? 2;
+        const dateStr = sheet.logDate
+          ? (sheet.logDate === todayISO ? 'Today' : sheet.logDate === yesterdayISO ? 'Yesterday' : formatDateDisplay(sheet.logDate))
+          : 'Today';
+        const timeStr = sheet.logTime ? formatTimeDisplay(sheet.logTime) : formatTimeDisplay(logTime);
+        const coachMsg = adherence ? ADHERENCE_MESSAGES[adherence] : ADHERENCE_MESSAGES.exact;
+        const adherenceLabel: Record<string, string> = {
+          exact: 'Followed as planned', mostly: 'Mostly followed',
+          changes: 'Modified', custom: 'Custom meal',
+        };
+        const slotCfg = sheet.selectedSlot ? MEAL_SLOTS[sheet.selectedSlot] : undefined;
+
+        const MealSuccessScreen = () => {
+          useEffect(() => {
+            const t = setTimeout(close, 3200);
+            return () => clearTimeout(t);
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+          }, []);
+
+          return (
+            <div style={{ position: 'relative', minHeight: '420px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 32px', textAlign: 'center' as const, overflow: 'hidden' }}>
+              {/* Glows */}
+              <motion.div animate={{ scale: [1, 1.15, 1], opacity: [0.25, 0.5, 0.25] }} transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: '320px', height: '320px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(107,143,113,0.22) 0%, transparent 65%)', pointerEvents: 'none' }} />
+              <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.35, 0.15] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+                style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,168,67,0.18) 0%, transparent 65%)', pointerEvents: 'none' }} />
+
+              {/* Check */}
+              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 300 }}
+                style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(107,143,113,0.28) 0%, rgba(107,143,113,0.1) 100%)', border: '1.5px solid rgba(107,143,113,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', position: 'relative', zIndex: 1, boxShadow: '0 0 48px rgba(107,143,113,0.3)' }}>
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#6B8F71" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </motion.div>
+
+              <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16, duration: 0.38 }} style={{ position: 'relative', zIndex: 1, width: '100%' }}>
+                {/* Slot + meal name */}
+                {slotCfg && (
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: slotCfg.accent, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: '4px', opacity: 0.85 }}>
+                    {slotCfg.emoji} {slotCfg.label}
+                  </p>
+                )}
+                <p style={{ fontSize: '18px', fontWeight: 800, color: '#fff', marginBottom: '4px', letterSpacing: '-0.02em' }}>{mealLabel} logged</p>
+                {/* Date/time + adherence row */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' as const }}>
+                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.38)', fontWeight: 500 }}>{dateStr} · {timeStr}</span>
+                  {adherence && (
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: adherence === 'exact' || adherence === 'mostly' ? '#A8C5AC' : '#D4A843', background: adherence === 'exact' || adherence === 'mostly' ? 'rgba(107,143,113,0.18)' : 'rgba(212,168,67,0.14)', border: `1px solid ${adherence === 'exact' || adherence === 'mostly' ? 'rgba(107,143,113,0.35)' : 'rgba(212,168,67,0.3)'}`, borderRadius: '12px', padding: '2px 9px' }}>
+                      {adherenceLabel[adherence]}
+                    </span>
+                  )}
+                </div>
+
+                {/* Points */}
+                <p style={{ fontSize: '44px', fontWeight: 900, color: '#D4A843', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '6px' }}>+{pts} H+</p>
+                <p style={{ fontSize: '18px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', marginBottom: '8px' }}>
+                  {hplus.score - pts}&thinsp;<span style={{ color: 'rgba(255,255,255,0.28)' }}>→</span>&thinsp;<span style={{ color: '#D4A843' }}>{hplus.score}</span>
+                </p>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.22)', borderRadius: '20px', padding: '4px 12px', marginBottom: '20px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(212,168,67,0.9)' }}>🔥 {hplus.streak}-day streak</span>
+                </div>
+
+                {/* Coaching insight */}
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, fontStyle: 'italic', maxWidth: '320px', margin: '0 auto' }}>
+                  &ldquo;{coachMsg}&rdquo;
+                </p>
+              </motion.div>
+            </div>
+          );
+        };
+
+        return <MealSuccessScreen />;
+      }
+
+      // ── Step: Slot select ────────────────────────────────────────────────────
+      if (sheet.step === 'slot-select') {
+        const slotKeys = Object.keys(MEAL_SLOTS);
+        return (
+          <>
+            <HeroImageBand imgSrc={ACTION_CARD_IMAGES.meal} label="What did you eat?" sublabel="Log Nutrition" coachNote="Every logged meal builds your coach's understanding of your patterns." />
+            <StepIndicator current={1} total={5} accentColor="#D4A843" />
+            <ActivityDateTimeSelector />
+
+            {/* Meal slot cards — horizontal scroll */}
+            <div style={{ padding: '8px 24px 4px', overflowX: 'auto', scrollbarWidth: 'none' as const, WebkitOverflowScrolling: 'touch' as const } as React.CSSProperties}>
+              <div style={{ display: 'flex', gap: '10px', paddingBottom: '4px', width: 'max-content' }}>
+                {slotKeys.map(key => {
+                  const slot = MEAL_SLOTS[key]!;
+                  const isNext = key === NEXT_MEAL_KEY;
+                  return (
+                    <motion.button key={key}
+                      whileHover={{ y: -4 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setSheet({ type: 'meal', step: 'plan-meal', selectedSlot: key, logDate, logTime })}
+                      style={{ width: '100px', padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '16px', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
+                      {/* Image */}
+                      <div style={{ position: 'relative', height: '72px', borderRadius: '14px', overflow: 'hidden', border: isNext ? `2px solid ${slot.accent}` : '1.5px solid rgba(255,255,255,0.1)', boxShadow: isNext ? `0 0 16px ${slot.accent}44` : 'none' }}>
+                        <img src={slot.img} alt={slot.label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.7) 100%)' }} />
+                        <span style={{ position: 'absolute', top: '6px', left: '8px', fontSize: '18px', lineHeight: 1 }}>{slot.emoji}</span>
+                        {isNext && (
+                          <div style={{ position: 'absolute', top: '5px', right: '5px', background: slot.accent, borderRadius: '8px', padding: '1px 5px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: 800, color: '#000' }}>NEXT</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Label */}
+                      <p style={{ fontSize: '11px', fontWeight: 700, color: isNext ? slot.accent : 'rgba(255,255,255,0.7)', marginTop: '6px', marginBottom: '1px', textAlign: 'center' as const }}>{slot.label}</p>
+                      <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.28)', textAlign: 'center' as const, fontWeight: 500 }}>{slot.time}</p>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ padding: '4px 24px 24px' }}>
+              <button onClick={() => setSheet({ type: 'meal', step: 'custom-meal', selectedSlot: undefined, logDate, logTime })}
+                style={{ width: '100%', padding: '13px', background: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: '14px', fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.45)', cursor: 'pointer' }}>
+                + Log a custom meal
+              </button>
+            </div>
+          </>
+        );
+      }
+
+      // ── Step: Plan meal (from your plan) ──────────────────────────────────────
+      if (sheet.step === 'plan-meal' && sheet.selectedSlot) {
+        const slot = MEAL_SLOTS[sheet.selectedSlot]!;
+        const planMeal = TODAYS_MEAL_PLAN[sheet.selectedSlot];
+        const historyForSlot = MEAL_HISTORY.filter(h => h.slot === sheet.selectedSlot).slice(0, 5);
+
+        return (
+          <>
+            <HeroImageBand imgSrc={slot.img} label={`${slot.emoji} ${slot.label}`} sublabel={slot.time} accentColor={slot.accent} />
+            <StepIndicator current={2} total={5} accentColor={slot.accent} />
+            <ActivityDateTimeSelector />
+            <div style={{ padding: '8px 24px 28px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* From Your Plan */}
+              {planMeal && (
+                <div>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: '8px' }}>From Your Plan</p>
+                  <motion.button
+                    whileHover={{ scale: 1.015 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => { setSkippedComponents([]); setSheet({ type: 'meal', step: 'adherence', selectedSlot: sheet.selectedSlot, selectedMeal: sheet.selectedSlot, logDate, logTime }); }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'flex-start', gap: '12px', background: slot.bg, border: `1.5px solid ${slot.border}`, borderRadius: '18px', padding: '14px 16px', cursor: 'pointer', textAlign: 'left' as const, boxShadow: `0 0 24px ${slot.accent}18` }}>
+                    {/* Mini food image */}
+                    <div style={{ width: '52px', height: '52px', borderRadius: '12px', overflow: 'hidden', flexShrink: 0 }}>
+                      <img src={planMeal.img ?? slot.img} alt={planMeal.items[0]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' as const }}>
+                        {planMeal.badge && (
+                          <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, padding: '2px 7px', borderRadius: '8px',
+                            background: planMeal.badge === 'coach-selected' ? 'rgba(212,168,67,0.18)' : 'rgba(107,143,113,0.18)',
+                            color: planMeal.badge === 'coach-selected' ? '#D4A843' : '#A8C5AC',
+                          }}>
+                            {planMeal.badge === 'coach-selected' ? 'Coach Selected' : 'Recommended'}
+                          </span>
+                        )}
+                        {planMeal.tags?.map(t => (
+                          <span key={t} style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.38)', background: 'rgba(255,255,255,0.07)', borderRadius: '6px', padding: '1px 6px' }}>
+                            {t === 'protein' ? '💪 Protein' : t === 'fiber' ? '🌾 Fiber' : '⚖️ Balanced'}
+                          </span>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '4px' }}>
+                        {planMeal.items.map((item, i) => (
+                          <span key={i} style={{ fontSize: '14px', fontWeight: 600, color: '#fff', opacity: 0.9, lineHeight: 1.4 }}>
+                            {item}{i < planMeal.items.length - 1 ? <span style={{ opacity: 0.35, marginLeft: '4px', marginRight: '4px' }}>·</span> : null}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: '2px', opacity: 0.35 }}>
+                      <path d="M6 4l4 4-4 4" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </motion.button>
+                </div>
+              )}
+
+              {/* From History */}
+              {historyForSlot.length > 0 && (
+                <div>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: '8px', marginTop: '4px' }}>More From Your History</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                    {historyForSlot.map((h, i) => (
+                      <motion.button key={i}
+                        whileHover={{ scale: 1.012 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => setSheet({ type: 'meal', step: 'portion', selectedSlot: sheet.selectedSlot, historyMeal: h.name, logDate, logTime, adherenceLevel: 'custom', earnedPoints: 1 })}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: '14px', padding: '11px 14px', cursor: 'pointer', textAlign: 'left' as const }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="rgba(255,255,255,0.35)" strokeWidth="1.2"/><path d="M7 4.5V7l1.5 1" stroke="rgba(255,255,255,0.35)" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', margin: 0, marginBottom: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{h.name}</p>
+                          <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.32)', margin: 0, fontWeight: 500 }}>Last logged {h.lastLogged}</p>
+                        </div>
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, opacity: 0.25 }}>
+                          <path d="M5 3.5l3.5 3.5L5 10.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Custom meal option */}
+              <button
+                onClick={() => setSheet({ type: 'meal', step: 'custom-meal', selectedSlot: sheet.selectedSlot, logDate, logTime })}
+                style={{ marginTop: '4px', padding: '12px', background: 'transparent', color: 'rgba(255,255,255,0.35)', border: '1.5px solid rgba(255,255,255,0.09)', borderRadius: '14px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', width: '100%' }}>
+                + Something else
+              </button>
+            </div>
+          </>
+        );
+      }
+
+      // ── Step: Adherence capture ───────────────────────────────────────────────
+      if (sheet.step === 'adherence' && sheet.selectedMeal) {
+        const planMeal = TODAYS_MEAL_PLAN[sheet.selectedMeal]!;
+        const slot = sheet.selectedSlot ? MEAL_SLOTS[sheet.selectedSlot] : undefined;
+        const adherenceOptions: { level: MealAdherenceLevel; label: string; sublabel: string; icon: string; accent: string; bg: string; border: string }[] = [
+          { level: 'exact',   label: 'Exactly as planned',  sublabel: 'Every item as assigned',     icon: '✓', accent: '#6B8F71', bg: 'rgba(107,143,113,0.14)', border: 'rgba(107,143,113,0.38)' },
+          { level: 'mostly',  label: 'Mostly followed',     sublabel: 'Minor swaps or portions',    icon: '≈', accent: '#A8C5AC', bg: 'rgba(168,197,172,0.1)',  border: 'rgba(168,197,172,0.28)' },
+          { level: 'changes', label: 'Made a few changes',  sublabel: 'Different items but similar',icon: '~', accent: '#D4A843', bg: 'rgba(212,168,67,0.1)',  border: 'rgba(212,168,67,0.28)' },
+          { level: 'custom',  label: 'Ate something different', sublabel: 'Completely different meal', icon: '≠', accent: '#C8604A', bg: 'rgba(200,96,74,0.1)', border: 'rgba(200,96,74,0.25)' },
+        ];
+
+        return (
+          <>
+            <HeroImageBand imgSrc={slot?.img ?? ACTION_CARD_IMAGES.meal} label="How closely did you follow?" sublabel={`${slot?.emoji ?? ''} ${slot?.label ?? 'Meal'} · Adherence`} accentColor={slot?.accent} coachNote={planMeal.items.join(' · ')} />
+            <StepIndicator current={3} total={5} accentColor={slot?.accent} />
+            <ActivityDateTimeSelector />
+            <div style={{ padding: '8px 24px 28px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {adherenceOptions.map(opt => (
+                <motion.button key={opt.level}
+                  whileHover={{ scale: 1.015 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    if (opt.level === 'custom') {
+                      setSheet({ type: 'meal', step: 'custom-meal', selectedSlot: sheet.selectedSlot, selectedMeal: sheet.selectedMeal, logDate, logTime });
+                    } else if (opt.level === 'changes') {
+                      setSelectedChangeTags([]);
+                      setSheet({ type: 'meal', step: 'adherence-changes', selectedSlot: sheet.selectedSlot, selectedMeal: sheet.selectedMeal, adherenceLevel: 'changes', logDate, logTime });
+                    } else {
+                      setSheet({ type: 'meal', step: 'components', selectedSlot: sheet.selectedSlot, selectedMeal: sheet.selectedMeal, adherenceLevel: opt.level, logDate, logTime, earnedPoints: ADHERENCE_POINTS[opt.level] });
+                    }
+                  }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '14px', background: opt.bg, border: `1.5px solid ${opt.border}`, borderRadius: '16px', padding: '14px 16px', cursor: 'pointer', textAlign: 'left' as const }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 900, color: opt.accent, flexShrink: 0 }}>
+                    {opt.icon}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#fff', margin: 0, marginBottom: '2px' }}>{opt.label}</p>
+                    <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.38)', margin: 0, fontWeight: 500 }}>{opt.sublabel}</p>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, opacity: 0.3 }}>
+                    <path d="M5 3.5l3.5 3.5L5 10.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </motion.button>
+              ))}
+            </div>
+          </>
+        );
+      }
+
+      // ── Step: Adherence changes (what changed) ────────────────────────────────
+      if (sheet.step === 'adherence-changes' && sheet.selectedMeal) {
+        const changeTags: { id: MealChangeTag; label: string }[] = [
+          { id: 'different-protein', label: 'Different protein' },
+          { id: 'different-carb',    label: 'Different carb' },
+          { id: 'different-veg',     label: 'Different vegetables' },
+          { id: 'added-item',        label: 'Added an item' },
+          { id: 'removed-item',      label: 'Removed an item' },
+          { id: 'other',             label: 'Other' },
+        ];
+        const canSubmit = selectedChangeTags.length > 0;
+        const slot2 = sheet.selectedSlot ? MEAL_SLOTS[sheet.selectedSlot] : undefined;
+
+        return (
+          <>
+            <HeroImageBand imgSrc={slot2?.img ?? ACTION_CARD_IMAGES.meal} label="What changed?" sublabel="Meal Modifications" accentColor={slot2?.accent} coachNote="This helps your coach understand your real eating patterns." />
+            <StepIndicator current={3} total={5} accentColor={slot2?.accent} />
+            <ActivityDateTimeSelector />
+            <div style={{ padding: '8px 24px 28px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '8px', marginBottom: '20px' }}>
+                {changeTags.map(t => {
+                  const active = selectedChangeTags.includes(t.id);
+                  return (
+                    <motion.button key={t.id}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setSelectedChangeTags(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])}
+                      style={{ padding: '10px 16px', borderRadius: '24px', border: `1.5px solid ${active ? 'rgba(212,168,67,0.6)' : 'rgba(255,255,255,0.12)'}`, background: active ? 'rgba(212,168,67,0.16)' : 'rgba(255,255,255,0.05)', fontSize: '13px', fontWeight: 700, color: active ? '#D4A843' : 'rgba(255,255,255,0.55)', cursor: 'pointer', transition: 'all 0.15s' }}>
+                      {active ? '✓ ' : ''}{t.label}
+                    </motion.button>
+                  );
+                })}
+              </div>
+              <button
+                disabled={!canSubmit}
+                onClick={() => setSheet({ type: 'meal', step: 'components', selectedSlot: sheet.selectedSlot, selectedMeal: sheet.selectedMeal, adherenceLevel: 'changes', changeTags: selectedChangeTags, logDate, logTime, earnedPoints: ADHERENCE_POINTS.changes })}
+                style={{ width: '100%', padding: '15px', background: canSubmit ? 'linear-gradient(135deg, #4A6E50 0%, #2D4A30 100%)' : 'rgba(255,255,255,0.08)', color: '#fff', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 700, cursor: canSubmit ? 'pointer' : 'default', letterSpacing: '-0.01em', transition: 'background 0.2s' }}>
+                Continue
+              </button>
+            </div>
+          </>
+        );
+      }
+
+      // ── Step: Components (check off items) ────────────────────────────────────
+      if (sheet.step === 'components' && sheet.selectedMeal) {
+        const planMeal = TODAYS_MEAL_PLAN[sheet.selectedMeal]!;
+        const slot = sheet.selectedSlot ? MEAL_SLOTS[sheet.selectedSlot] : undefined;
+
+        return (
+          <>
+            <HeroImageBand imgSrc={slot?.img ?? ACTION_CARD_IMAGES.meal} label="What did you eat?" sublabel={`${slot?.emoji ?? ''} ${slot?.label ?? 'Meal'} · Items`} accentColor={slot?.accent} coachNote="Deselect anything you skipped." />
+            <StepIndicator current={4} total={5} accentColor={slot?.accent} />
+            <ActivityDateTimeSelector />
+            <div style={{ padding: '8px 24px 8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {planMeal.items.map((item, i) => {
+                const isSkipped = skippedComponents.includes(item);
+                return (
+                  <motion.button key={i}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setSkippedComponents(prev => prev.includes(item) ? prev.filter(x => x !== item) : [...prev, item])}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', background: isSkipped ? 'rgba(255,255,255,0.03)' : (slot?.bg ?? 'rgba(107,143,113,0.12)'), border: `1.5px solid ${isSkipped ? 'rgba(255,255,255,0.07)' : (slot?.border ?? 'rgba(107,143,113,0.32)')}`, borderRadius: '14px', padding: '13px 16px', cursor: 'pointer', textAlign: 'left' as const, transition: 'all 0.15s' }}>
+                    <div style={{ width: '22px', height: '22px', borderRadius: '6px', border: `1.5px solid ${isSkipped ? 'rgba(255,255,255,0.15)' : (slot?.accent ?? '#6B8F71')}`, background: isSkipped ? 'transparent' : (slot?.bg ?? 'rgba(107,143,113,0.2)'), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+                      {!isSkipped && <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3 3L11 1" stroke={slot?.accent ?? '#6B8F71'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                    </div>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: isSkipped ? 'rgba(255,255,255,0.3)' : '#fff', margin: 0, textDecoration: isSkipped ? 'line-through' : 'none', transition: 'all 0.15s' }}>{item}</p>
+                  </motion.button>
+                );
+              })}
+            </div>
+            <div style={{ padding: '8px 24px 28px' }}>
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setSheet({ type: 'meal', step: 'portion', selectedSlot: sheet.selectedSlot, selectedMeal: sheet.selectedMeal, adherenceLevel: sheet.adherenceLevel, changeTags: sheet.changeTags, skippedComponents, logDate, logTime, earnedPoints: sheet.earnedPoints })}
+                style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, var(--color-sage) 0%, var(--color-sage-dark) 100%)', color: '#fff', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 700, cursor: 'pointer', letterSpacing: '-0.01em' }}>
+                Next → Portion
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      // ── Step: Portion ─────────────────────────────────────────────────────────
+      if (sheet.step === 'portion') {
+        const mealName = sheet.selectedMeal ? (TODAYS_MEAL_PLAN[sheet.selectedMeal]?.items[0] ?? 'this meal') : (sheet.historyMeal ?? sheet.customMealName ?? 'this meal');
+        const slot = sheet.selectedSlot ? MEAL_SLOTS[sheet.selectedSlot] : undefined;
+        const portionOptions = [
+          { pct: 25, label: '¼', sub: 'Quarter' },
+          { pct: 50, label: '½', sub: 'Half' },
+          { pct: 75, label: '¾', sub: 'Three quarters' },
+          { pct: 100, label: 'Full', sub: 'Complete' },
+        ];
+        const selected = sheet.portionPct ?? null;
+        const canGoBack = sheet.selectedMeal ? 'components' : 'plan-meal';
+
+        return (
+          <>
+            <HeroImageBand imgSrc={slot?.img ?? ACTION_CARD_IMAGES.meal} label="How much did you eat?" sublabel={`${slot?.emoji ?? ''} ${mealName}`} accentColor={slot?.accent} />
+            <StepIndicator current={5} total={5} accentColor={slot?.accent} />
+            <ActivityDateTimeSelector />
+            <div style={{ padding: '8px 24px 24px' }}>
+              {/* Visual portion chips */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
+                {portionOptions.map(p => {
+                  const isSelected = selected === p.pct;
+                  return (
+                    <motion.button key={p.pct}
+                      whileHover={{ y: -3 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setSheet({ ...sheet, portionPct: p.pct } as never)}
+                      style={{ padding: '18px 8px 14px', background: isSelected ? (slot?.bg ?? 'rgba(107,143,113,0.2)') : 'rgba(255,255,255,0.05)', border: `1.5px solid ${isSelected ? (slot?.accent ?? '#6B8F71') : 'rgba(255,255,255,0.1)'}`, borderRadius: '14px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', transition: 'all 0.15s', boxShadow: isSelected ? `0 0 16px ${slot?.accent ?? '#6B8F71'}33` : 'none' }}>
+                      {/* Visual fill bar */}
+                      <div style={{ width: '32px', height: '5px', borderRadius: '3px', background: 'rgba(255,255,255,0.1)', marginBottom: '6px', overflow: 'hidden' }}>
+                        <div style={{ width: `${p.pct}%`, height: '100%', background: isSelected ? (slot?.accent ?? '#6B8F71') : 'rgba(255,255,255,0.25)', borderRadius: '3px', transition: 'width 0.2s' }} />
+                      </div>
+                      <span style={{ fontSize: '18px', fontWeight: 900, color: isSelected ? (slot?.accent ?? '#A8C5AC') : 'rgba(255,255,255,0.6)', letterSpacing: '-0.02em' }}>{p.label}</span>
+                      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.28)', fontWeight: 600 }}>{p.sub}</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+
+              {/* Optional notes */}
+              <input
+                type="text"
+                value={mealNotes}
+                onChange={e => setMealNotes(e.target.value)}
+                placeholder="Notes (optional)..."
+                style={{ width: '100%', padding: '12px 16px', borderRadius: '14px', border: '1.5px solid rgba(255,255,255,0.1)', fontSize: '13px', background: 'rgba(255,255,255,0.05)', outline: 'none', boxSizing: 'border-box' as const, color: '#fff', fontFamily: 'inherit', marginBottom: '14px' }}
+              />
+
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                disabled={selected === null}
+                onClick={() => {
+                  if (selected === null) return;
+                  const pts = sheet.earnedPoints ?? ADHERENCE_POINTS[sheet.adherenceLevel ?? 'custom'] ?? 1;
+                  awardPoints('meal', pts);
+                  setSheet({ ...sheet, step: 'success', portionPct: selected, notes: mealNotes || undefined, earnedPoints: pts, logDate, logTime });
+                }}
+                style={{ width: '100%', padding: '15px', background: selected !== null ? 'linear-gradient(135deg, var(--color-sage) 0%, var(--color-sage-dark) 100%)' : 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 700, cursor: selected !== null ? 'pointer' : 'default', letterSpacing: '-0.01em', transition: 'background 0.2s' }}>
+                {selected !== null ? `Log Meal · +${sheet.earnedPoints ?? 1} H+` : 'Select a portion to continue'}
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      // ── Step: Custom meal ─────────────────────────────────────────────────────
+      if (sheet.step === 'custom-meal') {
+        const slot = sheet.selectedSlot ? MEAL_SLOTS[sheet.selectedSlot] : undefined;
+        const SERVING_UNITS = ['Bowl', 'Plate', 'Glass', 'Cup', 'Piece', 'Tablespoon', 'Teaspoon'];
+        const PORTION_CHIPS = ['25%', '50%', '75%', '100%'];
+        const canSubmit = customMealName.trim().length > 0;
+
+        return (
+          <>
+            <div style={{ padding: '20px 24px 6px' }}>
+              {slot && <p style={{ fontSize: '10px', fontWeight: 700, color: slot.accent, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: '2px' }}>{slot.emoji} {slot.label}</p>}
+              <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', margin: '0 0 4px' }}>What did you have?</h3>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.38)', margin: 0, fontWeight: 500 }}>Describe your meal</p>
+            </div>
+            <ActivityDateTimeSelector />
+            <div style={{ padding: '8px 24px 28px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Meal name */}
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: '6px' }}>Meal name</p>
+                <input
+                  autoFocus
+                  type="text"
+                  value={customMealName}
+                  onChange={e => setCustomMealName(e.target.value)}
+                  placeholder="e.g. Paneer Bhurji, Masala Dosa…"
+                  style={{ width: '100%', padding: '13px 16px', borderRadius: '14px', border: `1.5px solid ${customMealName.trim() ? 'rgba(107,143,113,0.45)' : 'rgba(255,255,255,0.12)'}`, fontSize: '14px', background: 'rgba(255,255,255,0.06)', outline: 'none', boxSizing: 'border-box' as const, color: '#fff', fontFamily: 'inherit', transition: 'border-color 0.15s' }}
+                />
+              </div>
+
+              {/* Portion consumed */}
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: '8px' }}>Portion consumed</p>
+                <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' as const, marginBottom: '8px' }}>
+                  {PORTION_CHIPS.map(c => {
+                    const isActive = customPortion === c;
+                    return (
+                      <button key={c} onClick={() => setCustomPortion(isActive ? '' : c)}
+                        style={{ padding: '8px 16px', borderRadius: '24px', border: `1.5px solid ${isActive ? 'rgba(107,143,113,0.6)' : 'rgba(255,255,255,0.12)'}`, background: isActive ? 'rgba(107,143,113,0.2)' : 'rgba(255,255,255,0.05)', fontSize: '13px', fontWeight: 700, color: isActive ? '#A8C5AC' : 'rgba(255,255,255,0.5)', cursor: 'pointer', transition: 'all 0.15s' }}>
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input type="text" value={customPortion.endsWith('%') ? '' : customPortion} onChange={e => setCustomPortion(e.target.value)}
+                  placeholder="Or enter custom amount…"
+                  style={{ width: '100%', padding: '11px 14px', borderRadius: '12px', border: '1.5px solid rgba(255,255,255,0.1)', fontSize: '13px', background: 'rgba(255,255,255,0.04)', outline: 'none', boxSizing: 'border-box' as const, color: '#fff', fontFamily: 'inherit' }} />
+              </div>
+
+              {/* Serving size */}
+              <div>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: '8px' }}>Serving size</p>
+                <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' as const }}>
+                  {SERVING_UNITS.map(u => {
+                    const isActive = customUnit === u;
+                    return (
+                      <button key={u} onClick={() => setCustomUnit(u)}
+                        style={{ padding: '7px 14px', borderRadius: '20px', border: `1.5px solid ${isActive ? 'rgba(212,168,67,0.55)' : 'rgba(255,255,255,0.1)'}`, background: isActive ? 'rgba(212,168,67,0.14)' : 'rgba(255,255,255,0.04)', fontSize: '12px', fontWeight: 700, color: isActive ? '#D4A843' : 'rgba(255,255,255,0.45)', cursor: 'pointer', transition: 'all 0.15s' }}>
+                        {u}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <input type="text" value={mealNotes} onChange={e => setMealNotes(e.target.value)}
+                placeholder="Notes (optional)…"
+                style={{ padding: '11px 14px', borderRadius: '12px', border: '1.5px solid rgba(255,255,255,0.1)', fontSize: '13px', background: 'rgba(255,255,255,0.04)', outline: 'none', color: '#fff', fontFamily: 'inherit' }} />
+
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                disabled={!canSubmit}
+                onClick={() => {
+                  awardPoints('meal', 1);
+                  setSheet({ type: 'meal', step: 'success', selectedSlot: sheet.selectedSlot, customMealName: customMealName.trim(), customPortion, customUnit, notes: mealNotes || undefined, logDate, logTime, adherenceLevel: 'custom', earnedPoints: 1 });
+                }}
+                style={{ width: '100%', padding: '15px', background: canSubmit ? 'linear-gradient(135deg, var(--color-sage) 0%, var(--color-sage-dark) 100%)' : 'rgba(255,255,255,0.08)', color: '#fff', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 700, cursor: canSubmit ? 'pointer' : 'default', letterSpacing: '-0.01em', transition: 'background 0.2s' }}>
+                Log Custom Meal · +1 H+
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      // ── Default / fallback: go to slot select ─────────────────────────────────
+      return null;
+    }
+
+    // ─── EXERCISE ──────────────────────────────────────────────────────────────
+    if (sheet.type === 'exercise') {
+      const ACTIVITIES_EX_ICONS: Record<string, string> = {
+        Walk: '🚶', Running: '🏃', Cycling: '🚴', Strength: '🏋', Yoga: '🧘', Swimming: '🏊', Sports: '⚽', Stretching: '✨',
+      };
+
+      if (sheet.step === 'success') {
+        return <SuccessScreen points={2} label="Workout Logged"
+          details={[
+            sheet.activity ? { icon: ACTIVITIES_EX_ICONS[sheet.activity] ?? '🏃', label: 'Activity', value: sheet.activity } : null,
+            sheet.duration ? { icon: '⏱', label: 'Duration', value: `${sheet.duration} min` } : null,
+            sheet.intensity ? { icon: '⚡', label: 'Intensity', value: sheet.intensity.charAt(0).toUpperCase() + sheet.intensity.slice(1) } : null,
+          ].filter(Boolean) as Array<{ icon: string; label: string; value: string }>}
+          subtitle="Consistent movement is one of the strongest predictors of metabolic improvement." />;
+      }
+
+      if (sheet.step === 'reflection' && sheet.activity && sheet.duration) {
+        const FEELINGS = [
+          { emoji: '😊', label: 'Energising', val: 'energising' },
+          { emoji: '🙂', label: 'Good', val: 'good' },
+          { emoji: '😅', label: 'Challenging', val: 'challenging' },
+          { emoji: '🔥', label: 'Very Hard', val: 'very-hard' },
+        ];
+        return (
+          <>
+            <HeroImageBand imgSrc={EXERCISE_IMAGES[sheet.activity] ?? ACTION_CARD_IMAGES.exercise} label="How did it feel?" sublabel={`${sheet.activity} · ${sheet.duration} min · ${sheet.intensity ?? ''}`} />
+            <StepIndicator current={4} total={4} accentColor="#6B8F71" />
+            <SharedDateTimeBar />
+            <div style={{ padding: '20px 24px 32px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginBottom: '20px' }}>Reflection helps your coach understand your recovery needs.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+                {FEELINGS.map(f => {
+                  const isSel = sheet.feeling === f.val;
+                  return (
+                    <motion.button key={f.val} whileHover={{ y: -3 }} whileTap={{ scale: 0.96 }}
+                      onClick={() => setSheet({ ...sheet, feeling: f.val })}
+                      style={{ padding: '22px 12px 18px', background: isSel ? 'rgba(107,143,113,0.2)' : 'rgba(255,255,255,0.05)', border: `1.5px solid ${isSel ? 'rgba(107,143,113,0.6)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', boxShadow: isSel ? '0 0 20px rgba(107,143,113,0.25)' : 'none', transition: 'all 0.15s' }}>
+                      <span style={{ fontSize: '36px', lineHeight: 1 }}>{f.emoji}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: isSel ? '#A8C5AC' : 'rgba(255,255,255,0.5)' }}>{f.label}</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+              <motion.button whileTap={{ scale: 0.98 }}
+                onClick={() => { awardPoints('exercise', 2); setSheet({ ...sheet, step: 'success' }); }}
+                style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #4A6E50 0%, #2D4A30 100%)', color: '#fff', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 700, cursor: 'pointer', letterSpacing: '-0.01em', boxShadow: '0 4px 20px rgba(74,143,80,0.35)' }}>
+                Log Workout · +2 H+
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      if (sheet.step === 'intensity' && sheet.activity && (sheet.duration !== undefined)) {
+        const INTENSITIES = [
+          { label: 'Easy', sub: 'Light effort, conversational', val: 'easy', color: '#6B8F71', bg: 'rgba(107,143,113,0.12)', border: 'rgba(107,143,113,0.35)' },
+          { label: 'Moderate', sub: 'Steady pace, some effort', val: 'moderate', color: '#D4A843', bg: 'rgba(212,168,67,0.12)', border: 'rgba(212,168,67,0.35)' },
+          { label: 'Vigorous', sub: 'Hard effort, limited talk', val: 'vigorous', color: '#E87040', bg: 'rgba(232,112,64,0.12)', border: 'rgba(232,112,64,0.35)' },
+          { label: 'Athletic', sub: 'Max effort, peak output', val: 'athletic', color: '#C8604A', bg: 'rgba(200,96,74,0.14)', border: 'rgba(200,96,74,0.4)' },
+        ];
+        return (
+          <>
+            <HeroImageBand imgSrc={EXERCISE_IMAGES[sheet.activity] ?? ACTION_CARD_IMAGES.exercise} label="Intensity" sublabel={`${sheet.activity} · ${sheet.duration} min`} />
+            <StepIndicator current={3} total={4} accentColor="#6B8F71" />
+            <SharedDateTimeBar />
+            <div style={{ padding: '16px 24px 32px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginBottom: '18px' }}>How hard did you push yourself?</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {INTENSITIES.map(i => (
+                  <motion.button key={i.val} whileHover={{ x: 3 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => setSheet({ ...sheet, step: 'reflection', intensity: i.val })}
+                    style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', background: i.bg, border: `1.5px solid ${i.border}`, borderRadius: '16px', cursor: 'pointer', textAlign: 'left' as const }}>
+                    <div style={{ width: '8px', height: '40px', borderRadius: '4px', background: i.color, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', margin: 0, marginBottom: '2px' }}>{i.label}</p>
+                      <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>{i.sub}</p>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, opacity: 0.3 }}>
+                      <path d="M5 3.5l3.5 3.5L5 10.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      }
+
+      if (sheet.step === 'duration' && sheet.activity) {
+        const actImg = EXERCISE_IMAGES[sheet.activity] ?? ACTION_CARD_IMAGES.exercise;
+        const QUICK_DURATIONS = [
+          { mins: 15, label: '15', sub: 'Quick' },
+          { mins: 20, label: '20', sub: 'Short' },
+          { mins: 30, label: '30', sub: 'Standard' },
+          { mins: 45, label: '45', sub: 'Solid' },
+          { mins: 60, label: '60', sub: 'Long' },
+          { mins: 90, label: '90', sub: 'Epic' },
+        ];
+        const getDurationEncouragement = (mins: number) => {
+          if (mins < 15) return 'Small steps create big changes.';
+          if (mins < 30) return 'Great consistency.';
+          if (mins < 60) return 'Excellent work.';
+          return "You're building real momentum.";
+        };
+        const clampDuration = (v: number) => Math.min(180, Math.max(1, v));
+        // Long-press: fires after 500ms hold, then repeats at 120ms — never double-fires with onClick
+        const startLongPress = (delta: number) => {
+          if (longPressRef.current) return;
+          const timeout = setTimeout(() => {
+            longPressRef.current = setInterval(() => {
+              setExerciseDuration(v => clampDuration(v + delta));
+            }, 120);
+          }, 500);
+          // Store timeout id in ref so stopLongPress can clear it
+          (longPressRef as React.MutableRefObject<ReturnType<typeof setInterval> | ReturnType<typeof setTimeout> | null>).current = timeout as unknown as ReturnType<typeof setInterval>;
+        };
+        const stopLongPress = () => {
+          if (longPressRef.current) { clearInterval(longPressRef.current); clearTimeout(longPressRef.current as unknown as ReturnType<typeof setTimeout>); longPressRef.current = null; }
+        };
+        const handleDragStart = (e: React.PointerEvent) => {
+          dragStartY.current = e.clientY;
+          dragStartVal.current = exerciseDuration;
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        };
+        const handleDragMove = (e: React.PointerEvent) => {
+          if (dragStartY.current === null) return;
+          const delta = Math.round((dragStartY.current - e.clientY) / 4);
+          setExerciseDuration(clampDuration(dragStartVal.current + delta));
+        };
+        const handleDragEnd = () => { dragStartY.current = null; };
+        return (
+          <>
+            <HeroImageBand imgSrc={actImg} label={sheet.activity} sublabel="Log Exercise" />
+            <StepIndicator current={2} total={4} accentColor="#6B8F71" />
+            <SharedDateTimeBar />
+            <div style={{ padding: '16px 20px 28px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', marginBottom: '16px', paddingLeft: '2px' }}>How long did you exercise?</p>
+
+              {/* ── Premium duration selector ── */}
+              <div style={{ background: 'linear-gradient(135deg, rgba(107,143,113,0.14) 0%, rgba(168,197,172,0.08) 100%)', border: '1.5px solid rgba(107,143,113,0.28)', borderRadius: '24px', padding: '24px 20px 20px', marginBottom: '16px', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 4px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.55)', letterSpacing: '0.14em', textTransform: 'uppercase' as const, textAlign: 'center' as const, marginBottom: '16px' }}>Duration</p>
+
+                {/* Draggable number */}
+                <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', marginBottom: '24px', cursor: 'ns-resize', userSelect: 'none' as const }}
+                  onPointerDown={handleDragStart}
+                  onPointerMove={handleDragMove}
+                  onPointerUp={handleDragEnd}
+                  onPointerCancel={handleDragEnd}>
+                  <motion.span
+                    key={exerciseDuration}
+                    initial={{ opacity: 0.6, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.1 }}
+                    style={{ fontSize: '80px', fontWeight: 900, color: '#A8C5AC', letterSpacing: '-0.04em', lineHeight: 1, display: 'block' }}>
+                    {exerciseDuration}
+                  </motion.span>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', marginTop: '4px' }}>minutes</span>
+                </div>
+
+                {/* − / + buttons — onClick for exact ±1, long-press to accelerate */}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '28px', marginBottom: '20px' }}>
+                  {([{ delta: -1, label: '−' }, { delta: 1, label: '+' }] as const).map(btn => (
+                    <motion.button
+                      key={btn.label}
+                      whileTap={{ scale: 0.88 }}
+                      onClick={() => setExerciseDuration(v => clampDuration(v + btn.delta))}
+                      onPointerDown={() => startLongPress(btn.delta)}
+                      onPointerUp={stopLongPress}
+                      onPointerLeave={stopLongPress}
+                      onPointerCancel={stopLongPress}
+                      style={{ width: '64px', height: '64px', borderRadius: '50%', background: btn.delta > 0 ? 'linear-gradient(135deg, rgba(107,143,113,0.30) 0%, rgba(107,143,113,0.14) 100%)' : 'linear-gradient(135deg, rgba(107,143,113,0.18) 0%, rgba(107,143,113,0.08) 100%)', border: `2px solid ${btn.delta > 0 ? 'rgba(107,143,113,0.55)' : 'rgba(107,143,113,0.35)'}`, cursor: 'pointer', fontSize: '32px', fontWeight: 300, color: '#A8C5AC', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: btn.delta > 0 ? '0 2px 16px rgba(107,143,113,0.25)' : '0 2px 8px rgba(0,0,0,0.2)', lineHeight: 1 }}>
+                      {btn.label}
+                    </motion.button>
+                  ))}
+                </div>
+
+                {/* Encouragement */}
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={getDurationEncouragement(exerciseDuration)}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.22 }}
+                    style={{ textAlign: 'center' as const, fontSize: '12px', color: 'rgba(168,197,172,0.65)', fontStyle: 'italic', margin: 0 }}>
+                    "{getDurationEncouragement(exerciseDuration)}"
+                  </motion.p>
+                </AnimatePresence>
+              </div>
+
+              {/* Confirm with custom duration */}
+              <motion.button
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setSheet({ ...sheet, step: 'intensity', duration: exerciseDuration })}
+                style={{ width: '100%', padding: '14px', background: 'linear-gradient(135deg, #6B8F71 0%, #4e7254 100%)', border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '14px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', marginBottom: '12px', boxShadow: '0 4px 16px rgba(107,143,113,0.4)' }}>
+                Confirm {exerciseDuration} min →
+              </motion.button>
+
+              {/* Quick-select cards */}
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, textAlign: 'center' as const, marginBottom: '10px' }}>Quick select</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '7px', marginBottom: '12px' }}>
+                {QUICK_DURATIONS.map(d => {
+                  const isSel = exerciseDuration === d.mins;
+                  return (
+                    <motion.button key={d.mins} whileTap={{ scale: 0.93 }}
+                      onClick={() => { setExerciseDuration(d.mins); setSheet({ ...sheet, step: 'intensity', duration: d.mins }); }}
+                      style={{ padding: '12px 4px 10px', background: isSel ? 'rgba(107,143,113,0.22)' : 'rgba(255,255,255,0.04)', border: `1.5px solid ${isSel ? 'rgba(107,143,113,0.55)' : 'rgba(255,255,255,0.08)'}`, borderRadius: '14px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', boxShadow: isSel ? '0 0 12px rgba(107,143,113,0.25)' : 'none', transition: 'all 0.15s' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 900, color: isSel ? '#A8C5AC' : 'rgba(255,255,255,0.55)', letterSpacing: '-0.03em' }}>{d.label}</span>
+                      <span style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(255,255,255,0.22)' }}>min</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+
+              <button onClick={() => setSheet({ type: 'exercise', step: 'pick' })}
+                style={{ width: '100%', padding: '11px', background: 'transparent', color: 'rgba(255,255,255,0.3)', border: 'none', fontSize: '13px', cursor: 'pointer', fontWeight: 600 }}>
+                ← Change activity
+              </button>
+            </div>
+          </>
+        );
+      }
+
+      // Step 1 — Pick activity
+      const ACTIVITIES_EX = [
+        { id: 'Walk', icon: '🚶', sub: 'Any pace, any distance' },
+        { id: 'Running', icon: '🏃', sub: 'Cardio & endurance' },
+        { id: 'Cycling', icon: '🚴', sub: 'Road, trail or indoor' },
+        { id: 'Strength', icon: '🏋', sub: 'Weights & resistance' },
+        { id: 'Yoga', icon: '🧘', sub: 'Mobility & mindfulness' },
+        { id: 'Swimming', icon: '🏊', sub: 'Full-body low impact' },
+        { id: 'Sports', icon: '⚽', sub: 'Team or individual' },
+        { id: 'Stretching', icon: '✨', sub: 'Flexibility & recovery' },
+      ];
+      const exImg: Record<string, string> = { ...EXERCISE_IMAGES, Running: EXERCISE_IMAGES.Cardio ?? ACTION_CARD_IMAGES.exercise };
+      return (
+        <>
+          <div style={{ position: 'relative', height: '180px', overflow: 'hidden', flexShrink: 0 }}>
+            <img src={ACTION_CARD_IMAGES.exercise} alt="Exercise" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(8,18,12,0.88) 100%)' }} />
+            <div style={{ position: 'absolute', bottom: '20px', left: '24px', right: '24px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.75)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '3px' }}>Log Exercise</p>
+              <h3 style={{ fontSize: '26px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', margin: 0, lineHeight: 1.1 }}>Every workout is an investment in your future self.</h3>
+            </div>
+          </div>
+          <StepIndicator current={1} total={4} accentColor="#6B8F71" />
+          <ActivityDateTimeSelector />
+          <div style={{ padding: '12px 20px 28px' }}>
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', marginBottom: '16px', paddingLeft: '4px' }}>What did you do?</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+              {ACTIVITIES_EX.map(a => (
+                <motion.button key={a.id} whileHover={{ y: -4 }} whileTap={{ scale: 0.96 }}
+                  onClick={() => setSheet({ type: 'exercise', step: 'duration', activity: a.id })}
+                  style={{ padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '16px', overflow: 'hidden', textAlign: 'left' as const }}>
+                  <div style={{ position: 'relative', height: '80px', borderRadius: '14px', overflow: 'hidden', border: '1.5px solid rgba(255,255,255,0.1)', boxShadow: '0 2px 12px rgba(0,0,0,0.3)' }}>
+                    <img src={exImg[a.id] ?? ACTION_CARD_IMAGES.exercise} alt={a.id} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.75) 100%)' }} />
+                    <div style={{ position: 'absolute', bottom: '8px', left: '10px', right: '10px' }}>
+                      <p style={{ fontSize: '12px', fontWeight: 800, color: '#fff', margin: 0 }}>{a.icon} {a.id}</p>
+                      <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', margin: 0 }}>{a.sub}</p>
+                    </div>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // ─── WATER ─────────────────────────────────────────────────────────────────
+    if (sheet.type === 'water') {
+
+      if (sheet.step === 'success') {
+        const amountLabel = sheet.amount ? (sheet.amount >= 1000 ? `${sheet.amount/1000}L` : `${sheet.amount}ml`) : '';
+        return <SuccessScreen points={2} label="Hydration Logged"
+          details={[
+            amountLabel ? { icon: '💧', label: 'Amount', value: amountLabel } : null,
+            sheet.context ? { icon: '🕐', label: 'When', value: sheet.context.charAt(0).toUpperCase() + sheet.context.slice(1) } : null,
+          ].filter(Boolean) as Array<{ icon: string; label: string; value: string }>}
+          subtitle="Staying hydrated improves focus, metabolism, and cellular repair throughout the day." />;
+      }
+
+      if (sheet.step === 'context' && sheet.amount) {
+        const contexts = [
+          { label: 'Morning', icon: '🌅', val: 'morning' },
+          { label: 'Afternoon', icon: '☀️', val: 'afternoon' },
+          { label: 'Evening', icon: '🌙', val: 'evening' },
+          { label: 'During Exercise', icon: '⚡', val: 'exercise' },
+        ];
+        return (
+          <>
+            <HeroImageBand imgSrc={ACTION_CARD_IMAGES.water} label="When was this?" sublabel={`Hydration · ${sheet.amount >= 1000 ? `${sheet.amount/1000}L` : `${sheet.amount}ml`}`} accentColor="#5BA8CC" />
+            <StepIndicator current={2} total={2} accentColor="#5BA8CC" />
+            <SharedDateTimeBar />
+            <div style={{ padding: '20px 24px 32px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginBottom: '18px' }}>Optional — helps track your hydration pattern.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
+                {contexts.map(c => {
+                  const isSel = sheet.context === c.val;
+                  return (
+                    <motion.button key={c.val} whileHover={{ y: -2 }} whileTap={{ scale: 0.96 }}
+                      onClick={() => { awardPoints('water', 2); setSheet({ ...sheet, step: 'success', context: c.val }); }}
+                      style={{ padding: '20px 12px', background: isSel ? 'rgba(91,168,204,0.18)' : 'rgba(255,255,255,0.05)', border: `1.5px solid ${isSel ? 'rgba(91,168,204,0.55)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '16px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', transition: 'all 0.15s' }}>
+                      <span style={{ fontSize: '28px', lineHeight: 1 }}>{c.icon}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: isSel ? '#7BC8E8' : 'rgba(255,255,255,0.6)' }}>{c.label}</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+              <button onClick={() => { awardPoints('water', 2); setSheet({ ...sheet, step: 'success' }); }}
+                style={{ width: '100%', padding: '13px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', color: 'rgba(255,255,255,0.4)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                Skip · Log now
+              </button>
+            </div>
+          </>
+        );
+      }
+
+      // Step 1 — Hydration counter
+      const HYDRATION_GOAL = 10;
+      const getHydrationMsg = (g: number) => {
+        if (g <= 2) return 'Good start.';
+        if (g <= 5) return 'Keep the momentum going.';
+        if (g <= 8) return 'Hydration supports energy and focus.';
+        return 'Excellent hydration today.';
+      };
+      const mlVal = waterGlasses * 250;
+      const mlLabel = mlVal >= 1000 ? `${(mlVal / 1000).toFixed(1).replace('.0', '')}L` : `${mlVal} ml`;
+      return (
+        <>
+          <div style={{ position: 'relative', height: '180px', overflow: 'hidden', flexShrink: 0 }}>
+            <img src={ACTION_CARD_IMAGES.water} alt="Water" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 50%' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(4,14,26,0.9) 100%)' }} />
+            <div style={{ position: 'absolute', bottom: '20px', left: '24px', right: '24px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(123,200,232,0.75)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '3px' }}>Hydration</p>
+              <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', margin: 0, lineHeight: 1.15 }}>Hydration powers every system in your body.</h3>
+            </div>
+          </div>
+          <StepIndicator current={1} total={2} accentColor="#5BA8CC" />
+          <ActivityDateTimeSelector />
+          <div style={{ padding: '16px 20px 28px' }}>
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', marginBottom: '16px', paddingLeft: '2px' }}>How much water did you drink?</p>
+
+            {/* ── Premium hydration counter ── */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(91,168,204,0.14) 0%, rgba(123,200,232,0.07) 100%)', border: '1.5px solid rgba(91,168,204,0.28)', borderRadius: '24px', padding: '24px 20px 22px', marginBottom: '16px', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 4px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)', position: 'relative', overflow: 'hidden' }}>
+
+              {/* Subtle water ripple orb */}
+              <motion.div
+                animate={{ scale: [1, 1.12, 1], opacity: [0.06, 0.13, 0.06] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '160px', height: '160px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(91,168,204,0.8) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+              {/* Counter value */}
+              <div style={{ position: 'relative', textAlign: 'center' as const, marginBottom: '8px' }}>
+                <div style={{ fontSize: '52px', lineHeight: 1, marginBottom: '4px' }}>💧</div>
+                <motion.span
+                  key={waterGlasses}
+                  initial={{ opacity: 0.5, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  style={{ display: 'block', fontSize: '48px', fontWeight: 900, color: '#7BC8E8', letterSpacing: '-0.04em', lineHeight: 1.1 }}>
+                  {waterGlasses} {waterGlasses === 1 ? 'Glass' : 'Glasses'}
+                </motion.span>
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={mlLabel}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: 'rgba(123,200,232,0.55)', marginTop: '2px' }}>
+                    ~{mlLabel}
+                  </motion.span>
+                </AnimatePresence>
+              </div>
+
+              {/* − / + buttons */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginBottom: '20px' }}>
+                <motion.button
+                  whileTap={{ scale: 0.88 }}
+                  onClick={() => setWaterGlasses(v => Math.max(1, v - 1))}
+                  style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(91,168,204,0.18) 0%, rgba(91,168,204,0.08) 100%)', border: '2px solid rgba(91,168,204,0.40)', cursor: 'pointer', fontSize: '28px', fontWeight: 900, color: '#7BC8E8', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.25)' }}>
+                  −
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.88 }}
+                  onClick={() => setWaterGlasses(v => Math.min(20, v + 1))}
+                  style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'linear-gradient(135deg, rgba(91,168,204,0.30) 0%, rgba(91,168,204,0.14) 100%)', border: '2px solid rgba(91,168,204,0.55)', cursor: 'pointer', fontSize: '28px', fontWeight: 900, color: '#7BC8E8', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 16px rgba(91,168,204,0.25)' }}>
+                  +
+                </motion.button>
+              </div>
+
+              {/* Hydration progress */}
+              <div style={{ marginBottom: '14px' }}>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.10em', textTransform: 'uppercase' as const, textAlign: 'center' as const, marginBottom: '10px' }}>Today's Hydration</p>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '5px', flexWrap: 'wrap' as const, marginBottom: '6px' }}>
+                  {Array.from({ length: HYDRATION_GOAL }).map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={false}
+                      animate={{ opacity: i < waterGlasses ? 1 : 0.22, scale: i < waterGlasses ? 1 : 0.82 }}
+                      transition={{ duration: 0.2, delay: i < waterGlasses ? i * 0.03 : 0 }}
+                      style={{ fontSize: '18px', lineHeight: 1 }}>
+                      💧
+                    </motion.div>
+                  ))}
+                </div>
+                <p style={{ textAlign: 'center' as const, fontSize: '11px', fontWeight: 700, color: 'rgba(123,200,232,0.45)', margin: 0 }}>
+                  {waterGlasses} / {HYDRATION_GOAL} glasses today
+                </p>
+              </div>
+
+              {/* Motivational message */}
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={getHydrationMsg(waterGlasses)}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.22 }}
+                  style={{ textAlign: 'center' as const, fontSize: '12px', color: 'rgba(123,200,232,0.6)', fontStyle: 'italic', margin: 0 }}>
+                  "{getHydrationMsg(waterGlasses)}"
+                </motion.p>
+              </AnimatePresence>
+            </div>
+
+            {/* Confirm */}
+            <motion.button
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setSheet({ type: 'water', step: 'context', amount: mlVal })}
+              style={{ width: '100%', padding: '14px', background: 'linear-gradient(135deg, #3a7fa8 0%, #2a5f82 100%)', border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '14px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', boxShadow: '0 4px 16px rgba(91,168,204,0.35)' }}>
+              Log {waterGlasses} {waterGlasses === 1 ? 'Glass' : 'Glasses'} ({mlLabel}) →
+            </motion.button>
+          </div>
+        </>
+      );
+    }
+
+    // ─── SLEEP ─────────────────────────────────────────────────────────────────
+    if (sheet.type === 'sleep') {
+
+      const calcSleepHours = (bed: string, wake: string) => {
+        const parse = (t: string) => {
+          const [time, period] = t.split(' ');
+          const [h, m] = (time ?? '').split(':').map(Number);
+          let hrs = (h ?? 0) % 12;
+          if (period === 'PM') hrs += 12;
+          return hrs * 60 + (m ?? 0);
+        };
+        let diff = parse(wake) - parse(bed);
+        if (diff < 0) diff += 1440;
+        return (diff / 60).toFixed(1);
+      };
+
+      if (sheet.step === 'success') {
+        const hrs = sheet.bedtime && sheet.waketime ? calcSleepHours(sheet.bedtime, sheet.waketime) : null;
+        return <SuccessScreen points={2} label="Sleep Logged"
+          details={[
+            hrs ? { icon: '😴', label: 'Duration', value: `${hrs}h` } : null,
+            sheet.quality ? { icon: sheet.quality === 'excellent' ? '⭐' : sheet.quality === 'good' ? '🙂' : sheet.quality === 'fair' ? '😐' : '😣', label: 'Quality', value: sheet.quality.charAt(0).toUpperCase() + sheet.quality.slice(1) } : null,
+            sheet.morningLight !== undefined ? { icon: sheet.morningLight ? '☀️' : '🌥', label: 'Sunlight', value: sheet.morningLight ? 'Yes' : 'No' } : null,
+          ].filter(Boolean) as Array<{ icon: string; label: string; value: string }>}
+          subtitle={sheet.morningLight ? 'Morning sunlight helps regulate circadian rhythm and improve metabolic health.' : 'Great days start with great nights. Consistent sleep times build powerful metabolic rhythms.'} />;
+      }
+
+      if (sheet.step === 'sunlight-prompt') {
+        return (
+          <>
+            <HeroImageBand imgSrc={ACTION_CARD_IMAGES.sunlight} label="Morning Sunlight?" sublabel="Sleep · Step 4" />
+            <StepIndicator current={4} total={4} accentColor="#7B8FC8" />
+            <SharedDateTimeBar />
+            <div style={{ padding: '16px 24px 32px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginBottom: '24px' }}>Morning light exposure anchors your circadian rhythm and improves sleep quality over time.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                {[{ label: 'Yes, got sunlight', icon: '☀️', val: true }, { label: 'No, stayed inside', icon: '🌥', val: false }].map(opt => (
+                  <motion.button key={String(opt.val)} whileHover={{ y: -3 }} whileTap={{ scale: 0.96 }}
+                    onClick={() => { awardPoints('sleep', 2); setSheet({ ...sheet, step: 'success', morningLight: opt.val }); }}
+                    style={{ padding: '28px 12px', background: opt.val ? 'rgba(232,160,48,0.12)' : 'rgba(255,255,255,0.05)', border: `1.5px solid ${opt.val ? 'rgba(232,160,48,0.4)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', transition: 'all 0.15s' }}>
+                    <span style={{ fontSize: '36px', lineHeight: 1 }}>{opt.icon}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: opt.val ? '#F0C060' : 'rgba(255,255,255,0.55)' }}>{opt.label}</span>
+                  </motion.button>
+                ))}
+              </div>
+              <button onClick={() => { awardPoints('sleep', 2); setSheet({ ...sheet, step: 'success' }); }}
+                style={{ width: '100%', padding: '12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', color: 'rgba(255,255,255,0.35)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                Skip this question
+              </button>
+            </div>
+          </>
+        );
+      }
+
+      if (sheet.step === 'interruptions' && sheet.quality) {
+        return (
+          <>
+            <HeroImageBand imgSrc={ACTION_CARD_IMAGES.sleep} label="Interruptions" sublabel="Sleep · Step 3" />
+            <StepIndicator current={3} total={4} accentColor="#7B8FC8" />
+            <SharedDateTimeBar />
+            <div style={{ padding: '14px 24px 32px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginBottom: '20px' }}>How many times did you wake during the night?</p>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                {[{ label: '0', sub: 'None' }, { label: '1', sub: 'Once' }, { label: '2', sub: 'Twice' }, { label: '3+', sub: 'Often' }].map(opt => {
+                  const isSel = sheet.interruptions === parseInt(opt.label);
+                  return (
+                    <motion.button key={opt.label} whileHover={{ y: -3 }} whileTap={{ scale: 0.95 }} style={{ flex: 1, padding: '20px 0 16px', background: isSel ? 'rgba(123,143,200,0.2)' : 'rgba(255,255,255,0.05)', border: `1.5px solid ${isSel ? 'rgba(123,143,200,0.6)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '16px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', boxShadow: isSel ? '0 0 16px rgba(123,143,200,0.25)' : 'none', transition: 'all 0.15s' }}
+                      onClick={() => setSheet({ ...sheet, step: 'sunlight-prompt', interruptions: parseInt(opt.label) })}>
+                      <span style={{ fontSize: '26px', fontWeight: 900, color: isSel ? '#8FA8D8' : 'rgba(255,255,255,0.6)', letterSpacing: '-0.02em' }}>{opt.label}</span>
+                      <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.3)' }}>{opt.sub}</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        );
+      }
+
+      if (sheet.step === 'quality' && sheet.waketime) {
+        const QUALITY_OPTIONS = [
+          { emoji: '😴', label: 'Excellent', sub: 'Woke up refreshed', val: 'excellent', color: '#6B8F71', bg: 'rgba(107,143,113,0.14)', border: 'rgba(107,143,113,0.38)' },
+          { emoji: '🙂', label: 'Good', sub: 'Reasonably rested', val: 'good', color: '#A8C5AC', bg: 'rgba(168,197,172,0.1)', border: 'rgba(168,197,172,0.28)' },
+          { emoji: '😐', label: 'Fair', sub: 'Some tiredness', val: 'fair', color: '#D4A843', bg: 'rgba(212,168,67,0.1)', border: 'rgba(212,168,67,0.28)' },
+          { emoji: '😣', label: 'Poor', sub: 'Quite restless', val: 'poor', color: '#C8604A', bg: 'rgba(200,96,74,0.1)', border: 'rgba(200,96,74,0.28)' },
+        ];
+        const hrs = sheet.bedtime ? calcSleepHours(sheet.bedtime, sheet.waketime) : null;
+        return (
+          <>
+            <HeroImageBand imgSrc={ACTION_CARD_IMAGES.sleep} label="Sleep Quality" sublabel={hrs ? `${hrs}h of sleep` : 'Sleep · Step 2'} />
+            <StepIndicator current={2} total={4} accentColor="#7B8FC8" />
+            <SharedDateTimeBar />
+            <div style={{ padding: '14px 24px 32px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginBottom: '18px' }}>How would you rate last night&apos;s sleep?</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {QUALITY_OPTIONS.map(q => (
+                  <motion.button key={q.val} whileHover={{ x: 3 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => setSheet({ ...sheet, step: 'interruptions', quality: q.val })}
+                    style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', background: q.bg, border: `1.5px solid ${q.border}`, borderRadius: '16px', cursor: 'pointer', textAlign: 'left' as const }}>
+                    <span style={{ fontSize: '28px', lineHeight: 1 }}>{q.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', margin: 0, marginBottom: '2px' }}>{q.label}</p>
+                      <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>{q.sub}</p>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, opacity: 0.3 }}>
+                      <path d="M5 3.5l3.5 3.5L5 10.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      }
+
+      // Step 1 — Bedtime + Wake Time combined
+      {
+        // Convert 12h display string "10:30 PM" → "22:30" for <input type="time">
+        const to24 = (display: string) => {
+          const [time, period] = display.split(' ');
+          const [hStr, mStr] = (time ?? '').split(':');
+          let h = parseInt(hStr ?? '0');
+          const m = parseInt(mStr ?? '0');
+          if (period === 'AM' && h === 12) h = 0;
+          if (period === 'PM' && h !== 12) h += 12;
+          return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        };
+        // Convert "22:30" → "10:30 PM"
+        const to12 = (hhmm: string) => {
+          const [hStr, mStr] = hhmm.split(':');
+          let h = parseInt(hStr ?? '0');
+          const m = parseInt(mStr ?? '0');
+          const period = h >= 12 ? 'PM' : 'AM';
+          if (h > 12) h -= 12;
+          if (h === 0) h = 12;
+          return `${h}:${String(m).padStart(2, '0')} ${period}`;
+        };
+        const sleepMins = (() => {
+          const parse = (t: string) => {
+            const [time, period] = t.split(' ');
+            const [h, m] = (time ?? '').split(':').map(Number);
+            let hrs = (h ?? 0) % 12;
+            if (period === 'PM') hrs += 12;
+            return hrs * 60 + (m ?? 0);
+          };
+          let diff = parse(sleepWaketime) - parse(sleepBedtime);
+          if (diff < 0) diff += 1440;
+          return diff;
+        })();
+        const sleepHrsDisplay = `${Math.floor(sleepMins / 60)}h ${sleepMins % 60 > 0 ? `${sleepMins % 60}m` : ''}`.trim();
+        const getSleepMsg = (mins: number) => {
+          if (mins < 360) return 'Your body may need more recovery.';
+          if (mins < 420) return 'A good foundation. Aim a little higher.';
+          if (mins < 540) return 'Excellent sleep duration.';
+          return 'Great recovery opportunity.';
+        };
+        return (
+          <>
+            <div style={{ position: 'relative', height: '180px', overflow: 'hidden', flexShrink: 0 }}>
+              <img src={ACTION_CARD_IMAGES.sleep} alt="Sleep" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(4,8,18,0.92) 100%)' }} />
+              <div style={{ position: 'absolute', bottom: '20px', left: '24px', right: '24px' }}>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(143,168,216,0.75)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '3px' }}>Log Sleep</p>
+                <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', margin: 0, lineHeight: 1.15 }}>Great days start with great nights.</h3>
+              </div>
+            </div>
+            <StepIndicator current={1} total={4} accentColor="#7B8FC8" />
+            <LastLoggedBar text="Sleep is typically logged in the morning for the previous night — you can adjust the date below." />
+            <ActivityDateTimeSelector />
+            <div style={{ padding: '12px 20px 28px' }}>
+
+              {/* Hidden time inputs — positioned off-screen so they never intercept pointer events on the card */}
+              <input
+                ref={bedtimeInputRef}
+                type="time"
+                value={to24(sleepBedtime)}
+                onChange={e => { if (e.target.value) setSleepBedtime(to12(e.target.value)); }}
+                style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', width: '1px', height: '1px', top: 0, left: 0 }}
+              />
+              <input
+                ref={waketimeInputRef}
+                type="time"
+                value={to24(sleepWaketime)}
+                onChange={e => { if (e.target.value) setSleepWaketime(to12(e.target.value)); }}
+                style={{ position: 'fixed', opacity: 0, pointerEvents: 'none', width: '1px', height: '1px', top: 0, left: 0 }}
+              />
+
+              {/* Bedtime selector card */}
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(143,168,216,0.5)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '8px', paddingLeft: '2px' }}>Bedtime</p>
+              <motion.button
+                whileHover={{ scale: 1.01, boxShadow: '0 4px 28px rgba(143,168,216,0.22)' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  const el = bedtimeInputRef.current;
+                  if (!el) return;
+                  if (typeof (el as HTMLInputElement & { showPicker?: () => void }).showPicker === 'function') {
+                    (el as HTMLInputElement & { showPicker: () => void }).showPicker();
+                  } else {
+                    el.focus();
+                    el.click();
+                  }
+                }}
+                style={{ width: '100%', background: 'linear-gradient(135deg, rgba(58,74,122,0.28) 0%, rgba(43,55,100,0.16) 100%)', border: '1.5px solid rgba(143,168,216,0.30)', borderRadius: '20px', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 2px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.06)', cursor: 'pointer', marginBottom: '12px', transition: 'border-color 0.15s' }}>
+                <span style={{ fontSize: '26px', lineHeight: 1, flexShrink: 0 }}>🌙</span>
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={sleepBedtime}
+                    initial={{ opacity: 0.6, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    transition={{ duration: 0.12 }}
+                    style={{ fontSize: '36px', fontWeight: 900, color: '#8FA8D8', letterSpacing: '-0.03em', lineHeight: 1, flex: 1, textAlign: 'left' as const }}>
+                    {sleepBedtime}
+                  </motion.span>
+                </AnimatePresence>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0, opacity: 0.35 }}>
+                  <path d="M4 7l5 5 5-5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </motion.button>
+
+              {/* Wake time selector card */}
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(232,160,48,0.5)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '8px', paddingLeft: '2px' }}>Wake Time</p>
+              <motion.button
+                whileHover={{ scale: 1.01, boxShadow: '0 4px 28px rgba(232,160,48,0.18)' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  const el = waketimeInputRef.current;
+                  if (!el) return;
+                  if (typeof (el as HTMLInputElement & { showPicker?: () => void }).showPicker === 'function') {
+                    (el as HTMLInputElement & { showPicker: () => void }).showPicker();
+                  } else {
+                    el.focus();
+                    el.click();
+                  }
+                }}
+                style={{ width: '100%', background: 'linear-gradient(135deg, rgba(100,80,32,0.28) 0%, rgba(80,60,20,0.16) 100%)', border: '1.5px solid rgba(232,160,48,0.30)', borderRadius: '20px', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 2px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.06)', cursor: 'pointer', marginBottom: '20px', transition: 'border-color 0.15s' }}>
+                <span style={{ fontSize: '26px', lineHeight: 1, flexShrink: 0 }}>☀️</span>
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={sleepWaketime}
+                    initial={{ opacity: 0.6, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    transition={{ duration: 0.12 }}
+                    style={{ fontSize: '36px', fontWeight: 900, color: '#F0C060', letterSpacing: '-0.03em', lineHeight: 1, flex: 1, textAlign: 'left' as const }}>
+                    {sleepWaketime}
+                  </motion.span>
+                </AnimatePresence>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0, opacity: 0.35 }}>
+                  <path d="M4 7l5 5 5-5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </motion.button>
+
+              {/* Sleep duration summary card */}
+              <div style={{ background: 'linear-gradient(135deg, rgba(28,43,30,0.60) 0%, rgba(20,30,55,0.60) 100%)', border: '1.5px solid rgba(143,168,216,0.18)', borderRadius: '20px', padding: '18px 20px', marginBottom: '20px', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '10px' }}>Estimated Sleep</p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '8px' }}>
+                  <AnimatePresence mode="wait">
+                    <motion.span
+                      key={sleepHrsDisplay}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ fontSize: '42px', fontWeight: 900, color: '#8FA8D8', letterSpacing: '-0.04em', lineHeight: 1 }}>
+                      {sleepHrsDisplay}
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={getSleepMsg(sleepMins)}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.22 }}
+                    style={{ fontSize: '13px', color: 'rgba(143,168,216,0.65)', fontStyle: 'italic', margin: 0 }}>
+                    {getSleepMsg(sleepMins)}
+                  </motion.p>
+                </AnimatePresence>
+              </div>
+
+              <motion.button whileTap={{ scale: 0.98 }}
+                onClick={() => setSheet({ type: 'sleep', step: 'quality', bedtime: sleepBedtime, waketime: sleepWaketime })}
+                style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #3A4A7A 0%, #1E2A5A 100%)', color: '#fff', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 700, cursor: 'pointer', letterSpacing: '-0.01em', boxShadow: '0 4px 20px rgba(58,74,122,0.4)' }}>
+                Next → Sleep Quality
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+    }
+
+    // ─── SUNLIGHT ──────────────────────────────────────────────────────────────
+    if (sheet.type === 'sunlight') {
+      if (sheet.step === 'success') return <SuccessScreen points={2} label="Sunlight Logged"
+        subtitle="Morning light anchors your circadian rhythm, supporting better sleep, mood, and metabolic health." />;
+
+      const clampSun = (v: number) => Math.min(120, Math.max(1, v));
+      const startSunLongPress = (delta: number) => {
+        if (sunlightLongPressRef.current) return;
+        const timeout = setTimeout(() => {
+          sunlightLongPressRef.current = setInterval(() => {
+            setSunlightMinutes(v => clampSun(v + delta));
+          }, 120);
+        }, 500);
+        sunlightLongPressRef.current = timeout as unknown as ReturnType<typeof setInterval>;
+      };
+      const stopSunLongPress = () => {
+        if (sunlightLongPressRef.current) {
+          clearInterval(sunlightLongPressRef.current as unknown as ReturnType<typeof setInterval>);
+          clearTimeout(sunlightLongPressRef.current as unknown as ReturnType<typeof setTimeout>);
+          sunlightLongPressRef.current = null;
+        }
+      };
+      const getSunMsg = (m: number) => {
+        if (m <= 5)  return 'A little light is better than none.';
+        if (m <= 10) return 'Good start. Morning light helps regulate your body clock.';
+        if (m <= 20) return 'Excellent. You\'re supporting healthy sleep, energy and metabolism.';
+        return 'Optimal morning light achieved.';
+      };
+
+      return (
+        <>
+          <div style={{ position: 'relative', height: '180px', overflow: 'hidden', flexShrink: 0 }}>
+            <img src={ACTION_CARD_IMAGES.sunlight} alt="Sunlight" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 40%' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(12,10,4,0.88) 100%)' }} />
+            <div style={{ position: 'absolute', bottom: '20px', left: '24px', right: '24px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(240,192,96,0.8)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '3px' }}>Morning Light</p>
+              <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', margin: 0, lineHeight: 1.15 }}>Natural light is one of the most powerful health anchors.</h3>
+            </div>
+          </div>
+          <div style={{ padding: '16px 20px 28px' }}>
+
+            {/* ── Benefit reinforcement card ── */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(100,72,8,0.38) 0%, rgba(60,44,8,0.22) 100%)', border: '1.5px solid rgba(232,160,48,0.28)', borderRadius: '20px', padding: '18px 20px', marginBottom: '16px', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', position: 'relative', overflow: 'hidden' }}>
+              {/* ambient warm glow */}
+              <motion.div animate={{ opacity: [0.10, 0.22, 0.10] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ position: 'absolute', top: '-20px', right: '-20px', width: '120px', height: '120px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,192,96,0.9) 0%, transparent 70%)', pointerEvents: 'none' }} />
+              <div style={{ position: 'relative' }}>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(240,192,96,0.6)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '6px' }}>Today's Sunlight</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                  <span style={{ fontSize: '22px' }}>☀️</span>
+                  <AnimatePresence mode="wait">
+                    <motion.span key={sunlightMinutes}
+                      initial={{ opacity: 0.6, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                      transition={{ duration: 0.14 }}
+                      style={{ fontSize: '28px', fontWeight: 900, color: '#F0C060', letterSpacing: '-0.03em' }}>
+                      {sunlightMinutes} minutes
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.10em', textTransform: 'uppercase' as const, marginBottom: '8px' }}>Supports</p>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '4px' }}>
+                  {['Energy', 'Sleep Quality', 'Circadian Rhythm'].map(b => (
+                    <div key={b} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6l3 3 5-5" stroke="#F0C060" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.65)' }}>{b}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Premium duration selector ── */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(100,72,8,0.22) 0%, rgba(40,28,4,0.16) 100%)', border: '1.5px solid rgba(232,160,48,0.24)', borderRadius: '24px', padding: '24px 20px 20px', marginBottom: '16px', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 4px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05)', position: 'relative', overflow: 'hidden' }}>
+              {/* Breathing amber glow behind the number */}
+              <motion.div animate={{ scale: [1, 1.14, 1], opacity: [0.07, 0.16, 0.07] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -60%)', width: '180px', height: '180px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,192,96,0.9) 0%, transparent 68%)', pointerEvents: 'none' }} />
+
+              <div style={{ position: 'relative', textAlign: 'center' as const, marginBottom: '24px' }}>
+                <AnimatePresence mode="wait">
+                  <motion.span key={sunlightMinutes}
+                    initial={{ opacity: 0.5, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.1 }}
+                    style={{ display: 'block', fontSize: '80px', fontWeight: 900, color: '#F0C060', letterSpacing: '-0.04em', lineHeight: 1 }}>
+                    {sunlightMinutes}
+                  </motion.span>
+                </AnimatePresence>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', marginTop: '4px', display: 'block' }}>minutes</span>
+              </div>
+
+              {/* − / + buttons */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '28px', marginBottom: '20px' }}>
+                {([{ delta: -1, label: '−' }, { delta: 1, label: '+' }] as const).map(btn => (
+                  <motion.button key={btn.label}
+                    whileTap={{ scale: 0.88 }}
+                    onClick={() => setSunlightMinutes(v => clampSun(v + btn.delta))}
+                    onPointerDown={() => startSunLongPress(btn.delta)}
+                    onPointerUp={stopSunLongPress}
+                    onPointerLeave={stopSunLongPress}
+                    onPointerCancel={stopSunLongPress}
+                    style={{ width: '64px', height: '64px', borderRadius: '50%', background: btn.delta > 0 ? 'linear-gradient(135deg, rgba(232,160,48,0.30) 0%, rgba(232,160,48,0.14) 100%)' : 'linear-gradient(135deg, rgba(232,160,48,0.18) 0%, rgba(232,160,48,0.08) 100%)', border: `2px solid ${btn.delta > 0 ? 'rgba(232,160,48,0.55)' : 'rgba(232,160,48,0.30)'}`, cursor: 'pointer', fontSize: '32px', fontWeight: 300, color: '#F0C060', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: btn.delta > 0 ? '0 2px 16px rgba(232,160,48,0.22)' : '0 2px 8px rgba(0,0,0,0.2)', lineHeight: 1 }}>
+                    {btn.label}
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* Coaching message */}
+              <AnimatePresence mode="wait">
+                <motion.p key={getSunMsg(sunlightMinutes)}
+                  initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.22 }}
+                  style={{ textAlign: 'center' as const, fontSize: '12px', color: 'rgba(240,192,96,0.65)', fontStyle: 'italic', margin: 0 }}>
+                  "{getSunMsg(sunlightMinutes)}"
+                </motion.p>
+              </AnimatePresence>
+            </div>
+
+            {/* Log button */}
+            <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }}
+              onClick={() => { awardPoints('sunlight', 2); setSheet({ type: 'sunlight', step: 'success', minutes: sunlightMinutes }); }}
+              style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, #B8860B 0%, #8B6508 100%)', border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', boxShadow: '0 4px 20px rgba(184,134,11,0.40)' }}>
+              Log {sunlightMinutes} min of Sunlight →
+            </motion.button>
+          </div>
+        </>
+      );
+    }
+
+    // ─── MEDITATION ────────────────────────────────────────────────────────────
+    if (sheet.type === 'meditation') {
+
+      // ── Shared helpers ──────────────────────────────────────────────────────
+      const MED_PURPLE = '#C090D0';
+      const MED_ACCENT = 'rgba(192,144,208,';
+      const clampMed = (v: number) => Math.min(120, Math.max(1, v));
+      const startMedLongPress = (delta: number) => {
+        if (meditationLongPressRef.current) return;
+        const t = setTimeout(() => {
+          meditationLongPressRef.current = setInterval(() => setMeditationMinutes(v => clampMed(v + delta)), 120);
+        }, 500);
+        meditationLongPressRef.current = t as unknown as ReturnType<typeof setInterval>;
+      };
+      const stopMedLongPress = () => {
+        if (meditationLongPressRef.current) {
+          clearInterval(meditationLongPressRef.current as unknown as ReturnType<typeof setInterval>);
+          clearTimeout(meditationLongPressRef.current as unknown as ReturnType<typeof setTimeout>);
+          meditationLongPressRef.current = null;
+        }
+      };
+      const MedHero = () => (
+        <div style={{ position: 'relative', height: '180px', overflow: 'hidden', flexShrink: 0 }}>
+          <img src={ACTION_CARD_IMAGES.meditation} alt="Meditation" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(8,4,18,0.9) 100%)' }} />
+          <div style={{ position: 'absolute', bottom: '20px', left: '24px', right: '24px' }}>
+            <p style={{ fontSize: '10px', fontWeight: 700, color: `${MED_ACCENT}0.8)`, letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '3px' }}>Mindfulness</p>
+            <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', margin: 0, lineHeight: 1.15 }}>A quiet mind is the foundation of clear action.</h3>
+          </div>
+        </div>
+      );
+      const MedDurationSelector = () => (
+        <div style={{ background: `linear-gradient(135deg, rgba(80,40,100,0.22) 0%, rgba(40,20,60,0.16) 100%)`, border: `1.5px solid ${MED_ACCENT}0.24)`, borderRadius: '24px', padding: '24px 20px 20px', marginBottom: '16px', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 4px 32px rgba(0,0,0,0.25)', position: 'relative', overflow: 'hidden' }}>
+          <motion.div animate={{ scale: [1, 1.14, 1], opacity: [0.06, 0.14, 0.06] }} transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-60%)', width: '200px', height: '200px', borderRadius: '50%', background: `radial-gradient(circle, ${MED_ACCENT}0.8) 0%, transparent 68%)`, pointerEvents: 'none' }} />
+          <div style={{ position: 'relative', textAlign: 'center' as const, marginBottom: '24px' }}>
+            <AnimatePresence mode="wait">
+              <motion.span key={meditationMinutes} initial={{ opacity: 0.5, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}
+                style={{ display: 'block', fontSize: '80px', fontWeight: 900, color: MED_PURPLE, letterSpacing: '-0.04em', lineHeight: 1 }}>
+                {meditationMinutes}
+              </motion.span>
+            </AnimatePresence>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', marginTop: '4px', display: 'block' }}>minutes</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '28px' }}>
+            {([{ delta: -1, label: '−' }, { delta: 1, label: '+' }] as const).map(btn => (
+              <motion.button key={btn.label} whileTap={{ scale: 0.88 }}
+                onClick={() => setMeditationMinutes(v => clampMed(v + btn.delta))}
+                onPointerDown={() => startMedLongPress(btn.delta)}
+                onPointerUp={stopMedLongPress} onPointerLeave={stopMedLongPress} onPointerCancel={stopMedLongPress}
+                style={{ width: '64px', height: '64px', borderRadius: '50%', background: btn.delta > 0 ? `linear-gradient(135deg, ${MED_ACCENT}0.30) 0%, ${MED_ACCENT}0.14) 100%)` : `linear-gradient(135deg, ${MED_ACCENT}0.18) 0%, ${MED_ACCENT}0.08) 100%)`, border: `2px solid ${btn.delta > 0 ? MED_ACCENT + '0.55)' : MED_ACCENT + '0.30)'}`, cursor: 'pointer', fontSize: '32px', fontWeight: 300, color: MED_PURPLE, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: btn.delta > 0 ? `0 2px 16px ${MED_ACCENT}0.22)` : '0 2px 8px rgba(0,0,0,0.2)', lineHeight: 1 }}>
+                {btn.label}
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      );
+
+      // ── SUCCESS ──────────────────────────────────────────────────────────────
+      if (sheet.step === 'success') {
+        const feelingEmojis: Record<string, string> = { overwhelmed: '😵', stressed: '😰', distracted: '⚡', tired: '😴', good: '😊' };
+        const postEmojis: Record<string, string> = { sad: '😔', neutral: '😐', okay: '🙂', calm: '😌', great: '😁' };
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', padding: '32px 24px 40px', textAlign: 'center' as const, position: 'relative', overflow: 'hidden' }}>
+            {/* Ambient glow */}
+            <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.08, 0.18, 0.08] }} transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: '-40px', left: '50%', transform: 'translateX(-50%)', width: '300px', height: '300px', borderRadius: '50%', background: `radial-gradient(circle, ${MED_ACCENT}0.7) 0%, transparent 68%)`, pointerEvents: 'none' }} />
+            <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, ease: 'easeOut' }}
+              style={{ position: 'relative', fontSize: '52px', marginBottom: '16px' }}>✨</motion.div>
+            <motion.h2 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.4 }}
+              style={{ fontSize: '26px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', marginBottom: '6px' }}>
+              {sheet.sessionType === 'live' ? 'Session Complete' : 'Meditation Logged'}
+            </motion.h2>
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25, duration: 0.4 }}
+              style={{ fontSize: '15px', color: MED_PURPLE, fontWeight: 700, marginBottom: '24px' }}>
+              {sheet.minutes} minutes completed
+            </motion.p>
+            {sheet.feeling && sheet.postFeeling && (
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.4 }}
+                style={{ background: `linear-gradient(135deg, rgba(80,40,100,0.30) 0%, rgba(40,20,60,0.20) 100%)`, border: `1.5px solid ${MED_ACCENT}0.25)`, borderRadius: '20px', padding: '18px 24px', marginBottom: '20px', width: '100%' }}>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: `${MED_ACCENT}0.45)`, letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '12px' }}>Mood Shift</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+                  <span style={{ fontSize: '36px' }}>{feelingEmojis[sheet.feeling] ?? '😊'}</span>
+                  <svg width="32" height="12" viewBox="0 0 32 12" fill="none"><path d="M2 6h24M20 2l6 4-6 4" stroke={MED_PURPLE} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span style={{ fontSize: '36px' }}>{postEmojis[sheet.postFeeling] ?? '😌'}</span>
+                </div>
+              </motion.div>
+            )}
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45, duration: 0.4 }}
+              style={{ background: `linear-gradient(135deg, rgba(80,40,100,0.20) 0%, rgba(40,20,60,0.12) 100%)`, border: `1.5px solid ${MED_ACCENT}0.18)`, borderRadius: '16px', padding: '14px 20px', marginBottom: '24px', width: '100%' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                Taking a mindful pause supports focus, emotional resilience and recovery.
+              </p>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.55, duration: 0.35 }}
+              style={{ background: `linear-gradient(135deg, ${MED_ACCENT}0.22) 0%, ${MED_ACCENT}0.10) 100%)`, border: `1.5px solid ${MED_ACCENT}0.35)`, borderRadius: '50px', padding: '8px 20px', marginBottom: '24px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>🌿</span>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: MED_PURPLE }}>+4 H+</span>
+            </motion.div>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={close}
+              style={{ width: '100%', padding: '15px', background: `linear-gradient(135deg, #6B3D8A 0%, #4A2268 100%)`, border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', boxShadow: `0 4px 20px ${MED_ACCENT}0.35)` }}>
+              Done
+            </motion.button>
+          </div>
+        );
+      }
+
+      // ── POST-SESSION REFLECTION ───────────────────────────────────────────────
+      if (sheet.step === 'post-feeling') {
+        const postOpts = [
+          { key: 'sad',     emoji: '😔', label: 'Still heavy' },
+          { key: 'neutral', emoji: '😐', label: 'About the same' },
+          { key: 'okay',    emoji: '🙂', label: 'A little better' },
+          { key: 'calm',    emoji: '😌', label: 'Calm' },
+          { key: 'great',   emoji: '😁', label: 'Great' },
+        ];
+        return (
+          <>
+            <MedHero />
+            <div style={{ padding: '24px 20px 32px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: `${MED_ACCENT}0.5)`, letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '6px' }}>Reflection</p>
+              <h3 style={{ fontSize: '22px', fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', marginBottom: '20px', lineHeight: 1.2 }}>How do you feel now?</h3>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                {postOpts.map(opt => (
+                  <motion.button key={opt.key} whileTap={{ scale: 0.90 }} whileHover={{ y: -3 }}
+                    onClick={() => { awardPoints('meditation', 4); setSheet({ ...sheet, step: 'success', postFeeling: opt.key }); }}
+                    style={{ flex: 1, padding: '18px 4px 14px', background: `${MED_ACCENT}0.08)`, border: `1.5px solid ${MED_ACCENT}0.22)`, borderRadius: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '28px', lineHeight: 1 }}>{opt.emoji}</span>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.45)', textAlign: 'center' as const }}>{opt.label}</span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      }
+
+      // ── ACTIVE SESSION ────────────────────────────────────────────────────────
+      if (sheet.step === 'active') {
+        const totalSecs = (sheet.minutes ?? meditationMinutes) * 60;
+        const secsLeft = meditationSecsLeft;
+        const elapsed = totalSecs - secsLeft;
+        const pct = Math.min(1, elapsed / totalSecs);
+        const mm = String(Math.floor(secsLeft / 60)).padStart(2, '0');
+        const ss = String(secsLeft % 60).padStart(2, '0');
+        const PROMPTS = [
+          'Your only task is to breathe.',
+          'Notice your thoughts. Let them pass.',
+          'Return your attention to the present moment.',
+          "You're creating space between stimulus and response.",
+          'There is nowhere to be but here.',
+          'Breathe in calm. Breathe out tension.',
+        ];
+        // Start timer + breath cycle on mount via a layout effect substitute:
+        // We use an inline effect keyed to step === 'active'
+        if (meditationTimerRef.current === null && !meditationPaused && secsLeft > 0) {
+          meditationTimerRef.current = setInterval(() => {
+            setMeditationSecsLeft(s => {
+              if (s <= 1) {
+                clearInterval(meditationTimerRef.current!);
+                meditationTimerRef.current = null;
+                return 0;
+              }
+              return s - 1;
+            });
+            setMeditationPromptIdx(i => i); // tick — prompts change on elapsed thresholds
+          }, 1000);
+          meditationBreathRef.current = setInterval(() => {
+            setBreathPhase(p => p === 'inhale' ? 'exhale' : 'inhale');
+          }, 4000);
+        }
+        // Auto-advance when timer hits zero
+        if (secsLeft === 0 && sheet.step === 'active') {
+          // Will be picked up next render — guard with a timeout call to avoid setState-in-render
+          setTimeout(() => setSheet(s => s.type === 'meditation' && s.step === 'active' ? { ...s, step: 'post-feeling' } : s), 800);
+        }
+        const promptIdx = Math.min(PROMPTS.length - 1, Math.floor(elapsed / 120));
+        const breathScale = breathPhase === 'inhale' ? 1.18 : 0.88;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', minHeight: '520px', background: 'linear-gradient(180deg, #0A0618 0%, #130A22 50%, #0E0818 100%)', padding: '28px 24px 32px', position: 'relative', overflow: 'hidden' }}>
+            {/* Ambient layers */}
+            <motion.div animate={{ scale: [1, 1.15, 1], opacity: [0.06, 0.14, 0.06] }} transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: '80px', left: '50%', transform: 'translateX(-50%)', width: '320px', height: '320px', borderRadius: '50%', background: `radial-gradient(circle, ${MED_ACCENT}0.65) 0%, transparent 68%)`, pointerEvents: 'none' }} />
+            <motion.div animate={{ scale: [1, 1.08, 1], opacity: [0.04, 0.09, 0.04] }} transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+              style={{ position: 'absolute', top: '60px', left: '50%', transform: 'translateX(-50%)', width: '420px', height: '420px', borderRadius: '50%', background: `radial-gradient(circle, rgba(80,40,140,0.7) 0%, transparent 68%)`, pointerEvents: 'none' }} />
+
+            {/* Session title */}
+            <div style={{ position: 'relative', textAlign: 'center' as const, marginBottom: '8px', width: '100%' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: `${MED_ACCENT}0.45)`, letterSpacing: '0.14em', textTransform: 'uppercase' as const, marginBottom: '4px' }}>🌿 Calm The Mind</p>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.32)', margin: 0 }}>Breathe naturally</p>
+            </div>
+
+            {/* Breathing circle */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '24px 0 20px', flexShrink: 0 }}>
+              <motion.div
+                animate={{ scale: breathScale, opacity: breathPhase === 'inhale' ? 0.22 : 0.12 }}
+                transition={{ duration: 3.8, ease: 'easeInOut' }}
+                style={{ position: 'absolute', width: '200px', height: '200px', borderRadius: '50%', background: `radial-gradient(circle, ${MED_ACCENT}0.7) 0%, transparent 70%)` }} />
+              <motion.div
+                animate={{ scale: breathScale }}
+                transition={{ duration: 3.8, ease: 'easeInOut' }}
+                style={{ width: '130px', height: '130px', borderRadius: '50%', border: `1.5px solid ${MED_ACCENT}0.35)`, background: `radial-gradient(circle, ${MED_ACCENT}0.12) 0%, rgba(20,10,35,0.8) 65%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <AnimatePresence mode="wait">
+                  <motion.p key={breathPhase}
+                    initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.5 }}
+                    style={{ fontSize: '13px', fontWeight: 700, color: `${MED_ACCENT}0.7)`, letterSpacing: '0.04em', margin: 0, textTransform: 'uppercase' as const }}>
+                    {breathPhase === 'inhale' ? 'Inhale' : 'Exhale'}
+                  </motion.p>
+                </AnimatePresence>
+              </motion.div>
+            </div>
+
+            {/* Timer */}
+            <div style={{ position: 'relative', textAlign: 'center' as const, marginBottom: '16px' }}>
+              <motion.p key={`${mm}:${ss}`}
+                initial={{ opacity: 0.7 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}
+                style={{ fontSize: '52px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1, margin: 0 }}>
+                {mm}:{ss}
+              </motion.p>
+              {/* Progress arc (simple bar) */}
+              <div style={{ width: '120px', height: '3px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', margin: '10px auto 0', overflow: 'hidden' }}>
+                <motion.div animate={{ width: `${pct * 100}%` }} transition={{ duration: 0.9, ease: 'easeOut' }}
+                  style={{ height: '100%', background: `linear-gradient(90deg, ${MED_ACCENT}0.5), ${MED_PURPLE})`, borderRadius: '2px' }} />
+              </div>
+            </div>
+
+            {/* Gentle prompt */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px', marginBottom: '24px' }}>
+              <AnimatePresence mode="wait">
+                <motion.p key={promptIdx}
+                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.7 }}
+                  style={{ textAlign: 'center' as const, fontSize: '15px', color: 'rgba(255,255,255,0.38)', fontStyle: 'italic', lineHeight: 1.6, margin: 0 }}>
+                  "{PROMPTS[promptIdx]}"
+                </motion.p>
+              </AnimatePresence>
+            </div>
+
+            {/* Controls */}
+            <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+              <motion.button whileTap={{ scale: 0.96 }}
+                onClick={() => {
+                  if (meditationPaused) {
+                    setMeditationPaused(false);
+                    // timer restarts next render because ref is null
+                  } else {
+                    setMeditationPaused(true);
+                    if (meditationTimerRef.current) { clearInterval(meditationTimerRef.current); meditationTimerRef.current = null; }
+                    if (meditationBreathRef.current) { clearInterval(meditationBreathRef.current); meditationBreathRef.current = null; }
+                  }
+                }}
+                style={{ flex: 1, padding: '14px', background: `${MED_ACCENT}0.10)`, border: `1.5px solid ${MED_ACCENT}0.22)`, borderRadius: '14px', cursor: 'pointer', fontSize: '14px', fontWeight: 700, color: MED_PURPLE }}>
+                {meditationPaused ? '▶ Resume' : '⏸ Pause'}
+              </motion.button>
+              <motion.button whileTap={{ scale: 0.96 }}
+                onClick={() => {
+                  if (meditationTimerRef.current) { clearInterval(meditationTimerRef.current); meditationTimerRef.current = null; }
+                  if (meditationBreathRef.current) { clearInterval(meditationBreathRef.current); meditationBreathRef.current = null; }
+                  const elapsed = totalSecs - secsLeft;
+                  const completedMins = Math.max(1, Math.round(elapsed / 60));
+                  setSheet({ ...sheet, step: 'post-feeling', minutes: completedMins });
+                }}
+                style={{ flex: 1, padding: '14px', background: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: '14px', cursor: 'pointer', fontSize: '14px', fontWeight: 700, color: 'rgba(255,255,255,0.4)' }}>
+                End Session
+              </motion.button>
+            </div>
+          </div>
+        );
+      }
+
+      // ── SESSION PREP (Path B step 2) ─────────────────────────────────────────
+      if (sheet.step === 'session-prep') {
+        const feelingData: Record<string, { title: string; desc: string; duration: string }> = {
+          overwhelmed: { title: 'Ground & Release',    desc: 'A gentle session to settle scattered energy and restore a sense of calm.', duration: '8–12 minutes' },
+          stressed:    { title: 'Calm The Mind',       desc: 'Short mindfulness to reduce mental tension and restore focus.',            duration: '10–15 minutes' },
+          distracted:  { title: 'Return To Now',       desc: 'Bring your attention back to the present moment, one breath at a time.',  duration: '5–10 minutes' },
+          tired:       { title: 'Restorative Rest',    desc: 'A moment of stillness that supports gentle mental recovery.',             duration: '10–20 minutes' },
+          good:        { title: 'Deepen The Stillness', desc: 'Build on your positive state with a deepening presence practice.',       duration: '15–20 minutes' },
+        };
+        const rec = (feelingData[sheet.feeling ?? 'stressed'] ?? feelingData.stressed)!;
+        return (
+          <>
+            <MedHero />
+            <div style={{ padding: '16px 20px 28px' }}>
+              {/* Recommendation card */}
+              <div style={{ background: `linear-gradient(135deg, rgba(80,40,100,0.28) 0%, rgba(40,20,60,0.18) 100%)`, border: `1.5px solid ${MED_ACCENT}0.28)`, borderRadius: '20px', padding: '20px', marginBottom: '16px', position: 'relative', overflow: 'hidden' }}>
+                <motion.div animate={{ opacity: [0.06, 0.14, 0.06] }} transition={{ duration: 4, repeat: Infinity }}
+                  style={{ position: 'absolute', top: '-20px', right: '-20px', width: '120px', height: '120px', borderRadius: '50%', background: `radial-gradient(circle, ${MED_ACCENT}0.8) 0%, transparent 68%)`, pointerEvents: 'none' }} />
+                <div style={{ position: 'relative' }}>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: `${MED_ACCENT}0.5)`, letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '8px' }}>🌿 Recommended</p>
+                  <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#fff', marginBottom: '8px', letterSpacing: '-0.02em' }}>{rec.title}</h3>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.55)', marginBottom: '12px', lineHeight: 1.5 }}>{rec.desc}</p>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: `${MED_ACCENT}0.12)`, border: `1px solid ${MED_ACCENT}0.22)`, borderRadius: '50px', padding: '5px 12px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: MED_PURPLE }}>Recommended: {rec.duration}</span>
+                  </div>
+                </div>
+              </div>
+              {/* Duration selector */}
+              <MedDurationSelector />
+              {/* Begin CTA */}
+              <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }}
+                onClick={() => {
+                  const secs = meditationMinutes * 60;
+                  setMeditationSecsLeft(secs);
+                  setMeditationPaused(false);
+                  setBreathPhase('inhale');
+                  setMeditationPromptIdx(0);
+                  if (meditationTimerRef.current) { clearInterval(meditationTimerRef.current); meditationTimerRef.current = null; }
+                  if (meditationBreathRef.current) { clearInterval(meditationBreathRef.current); meditationBreathRef.current = null; }
+                  setSheet({ ...sheet, step: 'active', minutes: meditationMinutes, sessionType: 'live' });
+                }}
+                style={{ width: '100%', padding: '16px', background: `linear-gradient(135deg, #6B3D8A 0%, #4A2268 100%)`, border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '16px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', boxShadow: `0 4px 20px ${MED_ACCENT}0.35)` }}>
+                ▶ Begin Session
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      // ── HOW ARE YOU FEELING (Path B step 1) ─────────────────────────────────
+      if (sheet.step === 'feeling') {
+        const FEELINGS = [
+          { key: 'overwhelmed', emoji: '😵', label: 'Overwhelmed',  sub: "Let's create space to settle." },
+          { key: 'stressed',    emoji: '😰', label: 'Stressed',     sub: "Let's create a little space." },
+          { key: 'distracted',  emoji: '⚡', label: 'Distracted',   sub: 'Bring your attention back to the present.' },
+          { key: 'tired',       emoji: '😴', label: 'Tired',        sub: 'A moment of stillness can help.' },
+          { key: 'good',        emoji: '😊', label: 'Feeling Good', sub: 'Deepen what is already here.' },
+        ];
+        return (
+          <>
+            <MedHero />
+            <div style={{ padding: '16px 20px 28px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: `${MED_ACCENT}0.5)`, letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '6px' }}>Mindfulness Check-In</p>
+              <h3 style={{ fontSize: '22px', fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', marginBottom: '20px', lineHeight: 1.2 }}>How are you feeling right now?</h3>
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '10px' }}>
+                {FEELINGS.map(f => (
+                  <motion.button key={f.key} whileHover={{ x: 3 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => setSheet({ ...sheet, step: 'session-prep', feeling: f.key })}
+                    style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', background: `${MED_ACCENT}0.08)`, border: `1.5px solid ${MED_ACCENT}0.20)`, borderRadius: '18px', cursor: 'pointer', textAlign: 'left' as const }}>
+                    <span style={{ fontSize: '28px', lineHeight: 1, flexShrink: 0 }}>{f.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', margin: 0, marginBottom: '2px' }}>{f.label}</p>
+                      <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.38)', margin: 0, fontStyle: 'italic' }}>{f.sub}</p>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, opacity: 0.28 }}>
+                      <path d="M5 3.5l3.5 3.5L5 10.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      }
+
+      // ── LOG DURATION (Path A) ────────────────────────────────────────────────
+      if (sheet.step === 'log-duration') {
+        return (
+          <>
+            <MedHero />
+            <div style={{ padding: '16px 20px 28px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', marginBottom: '16px', paddingLeft: '2px' }}>How long did you meditate?</p>
+              <MedDurationSelector />
+              <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }}
+                onClick={() => { awardPoints('meditation', 4); setSheet({ ...sheet, step: 'success', minutes: meditationMinutes, sessionType: 'log' }); }}
+                style={{ width: '100%', padding: '15px', background: `linear-gradient(135deg, #6B3D8A 0%, #4A2268 100%)`, border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', boxShadow: `0 4px 20px ${MED_ACCENT}0.35)` }}>
+                Log {meditationMinutes} min of Meditation →
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      // ── MINDFULNESS CHECK-IN (pick) ──────────────────────────────────────────
+      return (
+        <>
+          <MedHero />
+          <div style={{ padding: '16px 20px 28px' }}>
+            <p style={{ fontSize: '10px', fontWeight: 700, color: `${MED_ACCENT}0.5)`, letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '6px' }}>Mindfulness Check-In</p>
+            <h3 style={{ fontSize: '22px', fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', marginBottom: '20px', lineHeight: 1.2 }}>Have you already meditated today?</h3>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '12px' }}>
+              <motion.button whileHover={{ y: -3, boxShadow: `0 8px 28px ${MED_ACCENT}0.20)` }} whileTap={{ scale: 0.98 }}
+                onClick={() => setSheet({ ...sheet, step: 'log-duration', sessionType: 'log' })}
+                style={{ width: '100%', padding: '22px 20px', background: `linear-gradient(135deg, rgba(80,40,100,0.28) 0%, rgba(40,20,60,0.18) 100%)`, border: `1.5px solid ${MED_ACCENT}0.30)`, borderRadius: '20px', cursor: 'pointer', textAlign: 'left' as const, boxShadow: `0 2px 20px rgba(0,0,0,0.2)` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: `${MED_ACCENT}0.16)`, border: `1.5px solid ${MED_ACCENT}0.28)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10l4 4 8-8" stroke={MED_PURPLE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '16px', fontWeight: 800, color: '#fff', margin: 0, marginBottom: '3px' }}>I Already Meditated</p>
+                    <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.42)', margin: 0 }}>Log a session you've completed.</p>
+                  </div>
+                </div>
+              </motion.button>
+              <motion.button whileHover={{ y: -3, boxShadow: `0 8px 28px ${MED_ACCENT}0.28)` }} whileTap={{ scale: 0.98 }}
+                onClick={() => setSheet({ ...sheet, step: 'feeling', sessionType: 'live' })}
+                style={{ width: '100%', padding: '22px 20px', background: `linear-gradient(135deg, rgba(100,50,130,0.36) 0%, rgba(60,28,85,0.24) 100%)`, border: `1.5px solid ${MED_ACCENT}0.40)`, borderRadius: '20px', cursor: 'pointer', textAlign: 'left' as const, boxShadow: `0 4px 24px ${MED_ACCENT}0.14)` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: `${MED_ACCENT}0.22)`, border: `1.5px solid ${MED_ACCENT}0.40)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '24px' }}>
+                    🧘
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '16px', fontWeight: 800, color: '#fff', margin: 0, marginBottom: '3px' }}>I'd Like To Meditate Now</p>
+                    <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.42)', margin: 0 }}>Take a mindful moment right now.</p>
+                  </div>
+                </div>
+              </motion.button>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // ─── MOOD ─────────────────────────────────────────────────────────────────
+    if (sheet.type === 'mood') {
+
+      if (sheet.step === 'success') {
+        const moodEmoji = [undefined,'😣','😔','😐','🙂','😁'][sheet.mood ?? 3] ?? '🙂';
+        return <SuccessScreen points={2} label="Mood Logged"
+          details={[
+            sheet.moodLabel ? { icon: moodEmoji, label: 'Mood', value: sheet.moodLabel } : null,
+            sheet.influences && sheet.influences.length > 0 ? { icon: '🔍', label: 'Influences', value: sheet.influences.slice(0, 2).join(', ') } : null,
+          ].filter(Boolean) as Array<{ icon: string; label: string; value: string }>}
+          subtitle="Emotional awareness is one of the strongest foundations of sustainable behaviour change." />;
+      }
+
+      if (sheet.step === 'reflection' && sheet.mood) {
+        const prompts = ["What contributed most to this feeling?", "What are you grateful for today?", "What would make tomorrow better?"];
+        const prompt = prompts[(sheet.mood - 1) % prompts.length] ?? prompts[0];
+        return (
+          <>
+            <HeroImageBand imgSrc={ACTION_CARD_IMAGES.mood} label="Reflection" sublabel={`Mood · ${sheet.moodLabel ?? ''}`} />
+            <StepIndicator current={3} total={3} accentColor="#A8C5AC" />
+            <SharedDateTimeBar />
+            <div style={{ padding: '14px 24px 32px' }}>
+              <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.55)', marginBottom: '16px', fontStyle: 'italic' }}>&ldquo;{prompt}&rdquo;</p>
+              <textarea value={moodReflection} onChange={e => setMoodReflection(e.target.value)}
+                placeholder="Optional — share your thoughts..."
+                rows={4}
+                style={{ width: '100%', padding: '14px 16px', borderRadius: '14px', border: '1.5px solid rgba(255,255,255,0.1)', fontSize: '14px', background: 'rgba(255,255,255,0.05)', outline: 'none', boxSizing: 'border-box' as const, color: '#fff', fontFamily: 'inherit', resize: 'none' as const, lineHeight: 1.6 }} />
+              <motion.button whileTap={{ scale: 0.98 }} style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #4A6E50 0%, #2D4A30 100%)', color: '#fff', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 700, cursor: 'pointer', letterSpacing: '-0.01em', marginTop: '16px', boxShadow: '0 4px 20px rgba(74,143,80,0.3)' }}
+                onClick={() => { awardPoints('mood', 2); setSheet({ ...sheet, step: 'success' }); }}>
+                Log Mood · +2 H+
+              </motion.button>
+              <button onClick={() => { awardPoints('mood', 2); setSheet({ ...sheet, step: 'success' }); }}
+                style={{ width: '100%', padding: '11px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', marginTop: '4px' }}>
+                Skip reflection
+              </button>
+            </div>
+          </>
+        );
+      }
+
+      if (sheet.step === 'influences' && sheet.mood) {
+        const INFLUENCE_CHIPS = ['Work', 'Family', 'Health', 'Sleep', 'Exercise', 'Food', 'Relationships', 'Finances', 'Travel', 'Self Care', 'Other'];
+        return (
+          <>
+            <HeroImageBand imgSrc={ACTION_CARD_IMAGES.mood} label="What influenced this?" sublabel={`Mood · ${sheet.moodLabel ?? ''}`} />
+            <StepIndicator current={2} total={3} accentColor="#A8C5AC" />
+            <SharedDateTimeBar />
+            <div style={{ padding: '14px 24px 32px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', marginBottom: '18px' }}>Select all that apply. This helps your coach understand patterns.</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '8px', marginBottom: '24px' }}>
+                {INFLUENCE_CHIPS.map(chip => {
+                  const isActive = moodInfluences.includes(chip);
+                  return (
+                    <motion.button key={chip} whileTap={{ scale: 0.94 }}
+                      onClick={() => setMoodInfluences(prev => prev.includes(chip) ? prev.filter(x => x !== chip) : [...prev, chip])}
+                      style={{ padding: '10px 16px', borderRadius: '24px', border: `1.5px solid ${isActive ? 'rgba(168,197,172,0.6)' : 'rgba(255,255,255,0.12)'}`, background: isActive ? 'rgba(107,143,113,0.18)' : 'rgba(255,255,255,0.05)', fontSize: '13px', fontWeight: 700, color: isActive ? '#A8C5AC' : 'rgba(255,255,255,0.55)', cursor: 'pointer', transition: 'all 0.15s' }}>
+                      {isActive ? '✓ ' : ''}{chip}
+                    </motion.button>
+                  );
+                })}
+              </div>
+              <motion.button whileTap={{ scale: 0.98 }}
+                onClick={() => setSheet({ ...sheet, step: 'reflection', influences: moodInfluences })}
+                style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #4A6E50 0%, #2D4A30 100%)', color: '#fff', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 700, cursor: 'pointer', letterSpacing: '-0.01em' }}>
+                Next → Reflection
+              </motion.button>
+              <button onClick={() => { awardPoints('mood', 2); setSheet({ ...sheet, step: 'success' }); }}
+                style={{ width: '100%', padding: '11px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', marginTop: '4px' }}>
+                Skip — log now
+              </button>
+            </div>
+          </>
+        );
+      }
+
+      // Step 1 — How are you feeling?
+      const MOODS_FULL = [
+        { emoji: '😁', label: 'Great', sub: 'Feeling on top', val: 5 },
+        { emoji: '🙂', label: 'Good', sub: 'Positive energy', val: 4 },
+        { emoji: '😐', label: 'Okay', sub: 'Getting through', val: 3 },
+        { emoji: '😔', label: 'Low', sub: 'Feeling flat', val: 2 },
+        { emoji: '😣', label: 'Stressed', sub: 'Overwhelmed', val: 1 },
+        { emoji: '😡', label: 'Frustrated', sub: 'On edge', val: 0 },
+      ];
+      return (
+        <>
+          <div style={{ position: 'relative', height: '180px', overflow: 'hidden', flexShrink: 0 }}>
+            <img src={ACTION_CARD_IMAGES.mood} alt="Mood" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(8,4,18,0.9) 100%)' }} />
+            <div style={{ position: 'absolute', bottom: '20px', left: '24px', right: '24px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.75)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '3px' }}>Mood Check-in</p>
+              <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', margin: 0, lineHeight: 1.15 }}>Understanding how you feel is the first step to improving it.</h3>
+            </div>
+          </div>
+          <StepIndicator current={1} total={3} accentColor="#A8C5AC" />
+          <ActivityDateTimeSelector />
+          <div style={{ padding: '14px 24px 32px' }}>
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', marginBottom: '18px' }}>How are you feeling right now?</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+              {MOODS_FULL.map(m => (
+                <motion.button key={m.val} whileHover={{ y: -4, scale: 1.04 }} whileTap={{ scale: 0.93 }}
+                  onClick={() => setSheet({ type: 'mood', step: 'influences', mood: m.val, moodLabel: m.label })}
+                  style={{ padding: '22px 8px 16px', background: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', transition: 'all 0.15s' }}>
+                  <span style={{ fontSize: '36px', lineHeight: 1 }}>{m.emoji}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>{m.label}</span>
+                  <span style={{ fontSize: '10px', fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>{m.sub}</span>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // ─── BIOMARKER ─────────────────────────────────────────────────────────────
+    if (sheet.type === 'biomarker') {
+      const METRICS = [
+        { id: 'weight',  label: 'Weight',         icon: '⚖️',  unit: 'kg',    color: '#6B8F71', accent: 'rgba(107,143,113,', lastVal: '70.4 kg',  lastDelta: '↓ 2.8 kg since Month 1', lastAge: '3 days ago',  story: 'Every reading helps reveal your long-term trend.' },
+        { id: 'waist',   label: 'Waist',           icon: '📏', unit: 'cm',    color: '#D4A843', accent: 'rgba(212,168,67,',  lastVal: '90 cm',    lastDelta: '↓ 4 cm since Month 1',   lastAge: '1 week ago',  story: 'Small changes often reflect meaningful metabolic improvements.' },
+        { id: 'bp',      label: 'Blood Pressure',  icon: '❤️', unit: 'mmHg',  color: '#C8604A', accent: 'rgba(200,96,74,',   lastVal: '118 / 76', lastDelta: 'Healthy range',           lastAge: '3 days ago',  story: 'Monitoring regularly helps you understand what works.' },
+        { id: 'glucose', label: 'Blood Glucose',   icon: '🩸', unit: 'mg/dL', color: '#4A8BBE', accent: 'rgba(74,139,190,',  lastVal: '94 mg/dL', lastDelta: 'Improving steadily',      lastAge: '1 week ago',  story: 'Consistency reveals patterns that matter.' },
+      ];
+      const currentMetric = METRICS.find(x => x.id === sheet.metric);
+
+      // ── Shared long-press factory ─────────────────────────────────────────
+      const makeLongPress = (ref: React.MutableRefObject<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>, setter: React.Dispatch<React.SetStateAction<number>>, delta: number, min: number, max: number) => ({
+        onClick: () => setter(v => Math.min(max, Math.max(min, v + delta))),
+        onPointerDown: () => {
+          if (ref.current) return;
+          const t = setTimeout(() => {
+            ref.current = setInterval(() => setter(v => Math.min(max, Math.max(min, v + delta))), 100);
+          }, 500);
+          ref.current = t as unknown as ReturnType<typeof setInterval>;
+        },
+        onPointerUp: () => { if (ref.current) { clearInterval(ref.current as unknown as ReturnType<typeof setInterval>); clearTimeout(ref.current as unknown as ReturnType<typeof setTimeout>); ref.current = null; } },
+        onPointerLeave: () => { if (ref.current) { clearInterval(ref.current as unknown as ReturnType<typeof setInterval>); clearTimeout(ref.current as unknown as ReturnType<typeof setTimeout>); ref.current = null; } },
+        onPointerCancel: () => { if (ref.current) { clearInterval(ref.current as unknown as ReturnType<typeof setInterval>); clearTimeout(ref.current as unknown as ReturnType<typeof setTimeout>); ref.current = null; } },
+      });
+
+      // ── Metric selector widget ─────────────────────────────────────────────
+      // val is stored ×10 for weight (one decimal), ×1 for others
+      const MetricSelector = ({ val, setVal, lpRef, unit, isDecimal, accentRgb }: {
+        val: number; setVal: React.Dispatch<React.SetStateAction<number>>;
+        lpRef: React.MutableRefObject<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval> | null>;
+        unit: string; isDecimal?: boolean; accentRgb: string;
+      }) => {
+        const displayVal = isDecimal ? (val / 10).toFixed(1) : String(val);
+        const c = `rgba(${accentRgb},`;
+        return (
+          <div style={{ background: `linear-gradient(135deg, ${c}0.16) 0%, ${c}0.08) 100%)`, border: `1.5px solid ${c}0.28)`, borderRadius: '24px', padding: '24px 20px 20px', marginBottom: '16px', position: 'relative', overflow: 'hidden', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+            <motion.div animate={{ scale: [1, 1.12, 1], opacity: [0.05, 0.12, 0.05] }} transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-60%)', width: '200px', height: '200px', borderRadius: '50%', background: `radial-gradient(circle, ${c}0.7) 0%, transparent 68%)`, pointerEvents: 'none' }} />
+            <div style={{ position: 'relative', textAlign: 'center' as const, marginBottom: '24px' }}>
+              <AnimatePresence mode="wait">
+                <motion.span key={displayVal} initial={{ opacity: 0.5, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.09 }}
+                  style={{ display: 'block', fontSize: '72px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1 }}>
+                  {displayVal}
+                </motion.span>
+              </AnimatePresence>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', marginTop: '4px', display: 'block' }}>{unit}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
+              {[{ d: isDecimal ? -1 : -1, label: '−' }, { d: isDecimal ? 1 : 1, label: '+' }].map(btn => (
+                <motion.button key={btn.label} whileTap={{ scale: 0.88 }}
+                  {...makeLongPress(lpRef, setVal, btn.d, isDecimal ? 300 : 1, isDecimal ? 2000 : 999)}
+                  style={{ width: '64px', height: '64px', borderRadius: '50%', background: btn.d > 0 ? `linear-gradient(135deg, ${c}0.28) 0%, ${c}0.14) 100%)` : `linear-gradient(135deg, ${c}0.16) 0%, ${c}0.08) 100%)`, border: `2px solid ${btn.d > 0 ? c + '0.50)' : c + '0.28)'}`, cursor: 'pointer', fontSize: '32px', fontWeight: 300, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: btn.d > 0 ? `0 2px 16px ${c}0.20)` : '0 2px 8px rgba(0,0,0,0.2)', lineHeight: 1 }}>
+                  {btn.label}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        );
+      };
+
+      // ── SUCCESS ──────────────────────────────────────────────────────────────
+      if (sheet.step === 'success') {
+        const m = currentMetric;
+        const readingLine = sheet.metric === 'bp'
+          ? `${sheet.value} / ${sheet.value2} mmHg`
+          : sheet.metric === 'weight'  ? `${sheet.value} kg`
+          : sheet.metric === 'waist'   ? `${sheet.value} cm`
+          : sheet.metric === 'glucose' ? `${sheet.value} mg/dL` : sheet.value ?? '';
+        const prevDelta = m?.lastDelta ?? '';
+        return (
+          <div style={{ padding: '32px 24px 40px', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', textAlign: 'center' as const, position: 'relative', overflow: 'hidden' }}>
+            <motion.div animate={{ scale: [1, 1.18, 1], opacity: [0.06, 0.16, 0.06] }} transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ position: 'absolute', top: '-40px', left: '50%', transform: 'translateX(-50%)', width: '280px', height: '280px', borderRadius: '50%', background: `radial-gradient(circle, ${m?.accent ?? 'rgba(107,143,113,'}0.7) 0%, transparent 68%)`, pointerEvents: 'none' }} />
+            <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.45, ease: 'easeOut' }}
+              style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '20px', background: `linear-gradient(135deg, ${m?.accent ?? 'rgba(107,143,113,'}0.30) 0%, ${m?.accent ?? 'rgba(107,143,113,'}0.14) 100%)`, border: `1.5px solid ${m?.accent ?? 'rgba(107,143,113,'}0.40)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', marginBottom: '16px', boxShadow: `0 4px 20px ${m?.accent ?? 'rgba(107,143,113,'}0.25)` }}>
+              {m?.icon ?? '📊'}
+            </motion.div>
+            <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.35 }}
+              style={{ fontSize: '10px', fontWeight: 700, color: m?.color ?? '#6B8F71', letterSpacing: '0.14em', textTransform: 'uppercase' as const, marginBottom: '6px' }}>
+              Reading Saved
+            </motion.p>
+            <motion.h2 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18, duration: 0.35 }}
+              style={{ fontSize: '40px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '4px' }}>
+              {readingLine}
+            </motion.h2>
+            {prevDelta && (
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.26, duration: 0.35 }}
+                style={{ fontSize: '14px', fontWeight: 700, color: m?.color ?? '#6B8F71', marginBottom: '20px' }}>
+                {prevDelta}
+              </motion.p>
+            )}
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34, duration: 0.35 }}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '16px', padding: '14px 20px', marginBottom: '20px', width: '100%' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.52)', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>
+                {m?.story ?? 'Tracking your health consistently helps reveal trends that aren\'t visible day to day.'}
+              </p>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.44, duration: 0.3 }}
+              style={{ background: `linear-gradient(135deg, ${m?.accent ?? 'rgba(107,143,113,'}0.22) 0%, ${m?.accent ?? 'rgba(107,143,113,'}0.10) 100%)`, border: `1.5px solid ${m?.accent ?? 'rgba(107,143,113,'}0.35)`, borderRadius: '50px', padding: '8px 20px', marginBottom: '24px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px' }}>✓</span>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: m?.color ?? '#6B8F71' }}>+2 H+</span>
+            </motion.div>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={close}
+              style={{ width: '100%', padding: '15px', background: `linear-gradient(135deg, ${m?.color ?? '#6B8F71'} 0%, ${m?.color ?? '#4a6e50'}99 100%)`, border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>
+              Done
+            </motion.button>
+          </div>
+        );
+      }
+
+      // ── GLUCOSE CONTEXT ───────────────────────────────────────────────────────
+      if (sheet.step === 'glucose-context') {
+        const ctxOpts = [
+          { label: 'Fasting',       sub: 'Morning, before eating',  val: 'fasting',       icon: '🌙' },
+          { label: 'Post Breakfast', sub: '1–2h after breakfast',   val: 'post-breakfast', icon: '🌅' },
+          { label: 'Post Lunch',    sub: '1–2h after lunch',        val: 'post-lunch',     icon: '☀️' },
+          { label: 'Post Dinner',   sub: '1–2h after dinner',       val: 'post-dinner',    icon: '🌙' },
+          { label: 'Random',        sub: 'Spot check',              val: 'random',         icon: '⚡' },
+        ];
+        return (
+          <>
+            <HeroImageBand imgSrc={BIOMARKER_IMAGES.glucose ?? ACTION_CARD_IMAGES.biomarker} label="Blood Glucose" sublabel="When did you measure?" accentColor="#4A8BBE" />
+            <div style={{ padding: '16px 20px 32px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.42)', marginBottom: '16px' }}>Context determines what your reading means.</p>
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '8px' }}>
+                {ctxOpts.map(c => (
+                  <motion.button key={c.val} whileHover={{ x: 3 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => { setBioNumVal(94); setSheet({ ...sheet, step: 'glucose-value', context: c.val }); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 16px', background: 'rgba(74,139,190,0.10)', border: '1.5px solid rgba(74,139,190,0.26)', borderRadius: '14px', cursor: 'pointer', textAlign: 'left' as const }}>
+                    <span style={{ fontSize: '22px', lineHeight: 1 }}>{c.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: '14px', fontWeight: 700, color: '#fff', margin: 0, marginBottom: '1px' }}>{c.label}</p>
+                      <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.38)', margin: 0 }}>{c.sub}</p>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, opacity: 0.28 }}><path d="M5 3.5l3.5 3.5L5 10.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      }
+
+      // ── GLUCOSE VALUE ─────────────────────────────────────────────────────────
+      if (sheet.step === 'glucose-value') {
+        const glucMsg = bioNumVal < 70  ? "Below normal range. Consider eating something." :
+                        bioNumVal <= 100 ? "Normal fasting range. Great reading." :
+                        bioNumVal <= 140 ? "Slightly elevated. Continue your habits." :
+                                           "Above target. Monitor and stay consistent.";
+        return (
+          <>
+            <HeroImageBand imgSrc={BIOMARKER_IMAGES.glucose ?? ACTION_CARD_IMAGES.biomarker} label="Blood Glucose" sublabel={`${sheet.context?.replace('-', ' ') ?? 'Reading'}`} accentColor="#4A8BBE" />
+            <div style={{ padding: '16px 20px 28px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.42)', flex: 1 }}>Consistency reveals patterns that matter.</p>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(74,139,190,0.7)', background: 'rgba(74,139,190,0.12)', borderRadius: '50px', padding: '3px 10px', flexShrink: 0 }}>Last: 98 mg/dL</span>
+              </div>
+              <MetricSelector val={bioNumVal} setVal={setBioNumVal} lpRef={bioLPRef} unit="mg/dL" isDecimal={false} accentRgb="74,139,190" />
+              <AnimatePresence mode="wait">
+                <motion.div key={glucMsg} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+                  style={{ background: 'rgba(74,139,190,0.10)', border: '1px solid rgba(74,139,190,0.22)', borderRadius: '14px', padding: '12px 16px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.65)', margin: 0, fontStyle: 'italic' }}>{glucMsg}</p>
+                </motion.div>
+              </AnimatePresence>
+              <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }}
+                onClick={() => { awardPoints('biomarker', 2); setSheet({ type: 'biomarker', step: 'success', metric: 'glucose', value: String(bioNumVal), context: sheet.context }); }}
+                style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, #3A6A9E 0%, #1E4A7E 100%)', border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', boxShadow: '0 4px 20px rgba(58,106,158,0.38)' }}>
+                Save {bioNumVal} mg/dL →
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      // ── BLOOD PRESSURE (single screen) ───────────────────────────────────────
+      if (sheet.step === 'bp-entry') {
+        const sys = bioNumVal;  // stored direct (not ×10)
+        const dia = bioNum2Val;
+        const bpInterp = sys < 120 && dia < 80  ? { label: 'Normal Range',      color: '#6B8F71', msg: 'Healthy reading. Well within target.' } :
+                          sys < 130 && dia < 80  ? { label: 'Slightly Elevated', color: '#D4A843', msg: 'Worth monitoring. Continue your lifestyle habits.' } :
+                          sys < 140 || dia < 90  ? { label: 'Above Normal',      color: '#C8604A', msg: 'Continue working with your care plan.' } :
+                                                   { label: 'High',              color: '#C8604A', msg: 'Speak with your care team. Keep tracking.' };
+        return (
+          <>
+            <HeroImageBand imgSrc={BIOMARKER_IMAGES.bp ?? ACTION_CARD_IMAGES.biomarker} label="Blood Pressure" sublabel="Today's Reading" accentColor="#C8604A" />
+            <div style={{ padding: '16px 20px 28px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.42)', flex: 1 }}>Monitoring regularly helps you understand what works.</p>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(200,96,74,0.7)', background: 'rgba(200,96,74,0.12)', borderRadius: '50px', padding: '3px 10px', flexShrink: 0 }}>Last: 118/76</span>
+              </div>
+
+              {/* Live preview */}
+              <div style={{ textAlign: 'center' as const, marginBottom: '14px' }}>
+                <AnimatePresence mode="wait">
+                  <motion.span key={`${sys}/${dia}`} initial={{ opacity: 0.6, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.1 }}
+                    style={{ fontSize: '48px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em' }}>
+                    {sys} <span style={{ opacity: 0.4, fontWeight: 300 }}>/</span> {dia}
+                  </motion.span>
+                </AnimatePresence>
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.3)', margin: '4px 0 0' }}>mmHg</p>
+              </div>
+
+              {/* Two selectors side by side */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                {/* Systolic */}
+                <div style={{ background: 'rgba(200,96,74,0.12)', border: '1.5px solid rgba(200,96,74,0.26)', borderRadius: '20px', padding: '16px 12px', textAlign: 'center' as const }}>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(200,96,74,0.6)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '8px' }}>Systolic</p>
+                  <AnimatePresence mode="wait">
+                    <motion.span key={sys} initial={{ opacity: 0.5, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.09 }}
+                      style={{ display: 'block', fontSize: '44px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '12px' }}>
+                      {sys}
+                    </motion.span>
+                  </AnimatePresence>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                    {[{ d: -1, l: '−' }, { d: 1, l: '+' }].map(b => (
+                      <motion.button key={b.l} whileTap={{ scale: 0.88 }}
+                        {...makeLongPress(bioLPRef, setBioNumVal, b.d, 60, 200)}
+                        style={{ width: '44px', height: '44px', borderRadius: '50%', background: b.d > 0 ? 'rgba(200,96,74,0.28)' : 'rgba(200,96,74,0.14)', border: `2px solid ${b.d > 0 ? 'rgba(200,96,74,0.50)' : 'rgba(200,96,74,0.28)'}`, cursor: 'pointer', fontSize: '22px', fontWeight: 300, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {b.l}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+                {/* Diastolic */}
+                <div style={{ background: 'rgba(200,96,74,0.12)', border: '1.5px solid rgba(200,96,74,0.26)', borderRadius: '20px', padding: '16px 12px', textAlign: 'center' as const }}>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(200,96,74,0.6)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '8px' }}>Diastolic</p>
+                  <AnimatePresence mode="wait">
+                    <motion.span key={dia} initial={{ opacity: 0.5, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.09 }}
+                      style={{ display: 'block', fontSize: '44px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '12px' }}>
+                      {dia}
+                    </motion.span>
+                  </AnimatePresence>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                    {[{ d: -1, l: '−' }, { d: 1, l: '+' }].map(b => (
+                      <motion.button key={b.l} whileTap={{ scale: 0.88 }}
+                        {...makeLongPress(bioLP2Ref, setBioNum2Val, b.d, 40, 140)}
+                        style={{ width: '44px', height: '44px', borderRadius: '50%', background: b.d > 0 ? 'rgba(200,96,74,0.28)' : 'rgba(200,96,74,0.14)', border: `2px solid ${b.d > 0 ? 'rgba(200,96,74,0.50)' : 'rgba(200,96,74,0.28)'}`, cursor: 'pointer', fontSize: '22px', fontWeight: 300, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {b.l}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Interpretation */}
+              <AnimatePresence mode="wait">
+                <motion.div key={bpInterp.label} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '14px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: bpInterp.color, flexShrink: 0 }} />
+                  <div>
+                    <p style={{ fontSize: '12px', fontWeight: 800, color: bpInterp.color, margin: 0, marginBottom: '2px' }}>{bpInterp.label}</p>
+                    <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', margin: 0 }}>{bpInterp.msg}</p>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+
+              <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }}
+                onClick={() => { awardPoints('biomarker', 2); setSheet({ type: 'biomarker', step: 'success', metric: 'bp', value: String(sys), value2: String(dia) }); }}
+                style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, #9E3A2A 0%, #7E1E0E 100%)', border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', boxShadow: '0 4px 20px rgba(200,96,74,0.32)' }}>
+                Save {sys} / {dia} mmHg →
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      // ── WEIGHT VALUE ──────────────────────────────────────────────────────────
+      if (sheet.step === 'weight-value') {
+        const weightKg = (bioNumVal / 10).toFixed(1);
+        const diff = (bioNumVal / 10 - 70.4).toFixed(1);
+        const diffNum = parseFloat(diff);
+        const weightMsg = diffNum < -0.1 ? "You're moving in the right direction." :
+                          diffNum > 0.1  ? "One measurement never defines your journey." :
+                                           "Consistency creates lasting results.";
+        return (
+          <>
+            <HeroImageBand imgSrc={BIOMARKER_IMAGES.weight ?? ACTION_CARD_IMAGES.biomarker} label="Weight" sublabel="Today's Reading" accentColor="#6B8F71" />
+            <div style={{ padding: '16px 20px 28px' }}>
+              {/* Last reading context */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+                <div style={{ flex: 1, background: 'rgba(107,143,113,0.10)', border: '1px solid rgba(107,143,113,0.22)', borderRadius: '14px', padding: '12px 14px' }}>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.55)', letterSpacing: '0.10em', textTransform: 'uppercase' as const, marginBottom: '4px' }}>Last Reading</p>
+                  <p style={{ fontSize: '20px', fontWeight: 900, color: '#A8C5AC', letterSpacing: '-0.02em', margin: 0 }}>70.4 kg</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.28)', margin: '2px 0 0' }}>3 days ago</p>
+                </div>
+                <div style={{ flex: 1, background: 'rgba(107,143,113,0.10)', border: '1px solid rgba(107,143,113,0.22)', borderRadius: '14px', padding: '12px 14px' }}>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.55)', letterSpacing: '0.10em', textTransform: 'uppercase' as const, marginBottom: '4px' }}>Change</p>
+                  <AnimatePresence mode="wait">
+                    <motion.p key={diff} initial={{ opacity: 0.6, y: -3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.1 }}
+                      style={{ fontSize: '20px', fontWeight: 900, color: diffNum < 0 ? '#A8C5AC' : diffNum > 0 ? '#C8604A' : 'rgba(255,255,255,0.5)', letterSpacing: '-0.02em', margin: 0 }}>
+                      {diffNum > 0 ? `+${diff}` : diff} kg
+                    </motion.p>
+                  </AnimatePresence>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.28)', margin: '2px 0 0' }}>vs last reading</p>
+                </div>
+              </div>
+              <MetricSelector val={bioNumVal} setVal={setBioNumVal} lpRef={bioLPRef} unit="kg" isDecimal={true} accentRgb="107,143,113" />
+              <AnimatePresence mode="wait">
+                <motion.div key={weightMsg} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}
+                  style={{ background: 'rgba(107,143,113,0.09)', border: '1px solid rgba(107,143,113,0.20)', borderRadius: '14px', padding: '12px 16px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.62)', margin: 0, fontStyle: 'italic' }}>{weightMsg}</p>
+                </motion.div>
+              </AnimatePresence>
+              <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }}
+                onClick={() => setSheet({ ...sheet, step: 'weight-timing', value: weightKg })}
+                style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, #4A6E50 0%, #2D4A30 100%)', border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', boxShadow: '0 4px 20px rgba(74,110,80,0.32)' }}>
+                Save {weightKg} kg →
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      // ── WEIGHT TIMING ─────────────────────────────────────────────────────────
+      if (sheet.step === 'weight-timing' && sheet.value) {
+        return (
+          <>
+            <HeroImageBand imgSrc={BIOMARKER_IMAGES.weight ?? ACTION_CARD_IMAGES.biomarker} label={`${sheet.value} kg`} sublabel="When did you weigh?" accentColor="#6B8F71" />
+            <div style={{ padding: '20px 20px 32px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.42)', marginBottom: '16px' }}>Morning (fasted) gives the most consistent readings over time.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {[{ label: 'Morning', sub: 'Fasted, after waking', icon: '🌅', val: 'morning' }, { label: 'Evening', sub: 'End of day', icon: '🌙', val: 'evening' }].map(t => (
+                  <motion.button key={t.val} whileHover={{ y: -3 }} whileTap={{ scale: 0.96 }}
+                    onClick={() => { awardPoints('biomarker', 2); setSheet({ type: 'biomarker', step: 'success', metric: 'weight', value: sheet.value, timing: t.val }); }}
+                    style={{ padding: '28px 12px 22px', background: 'rgba(107,143,113,0.12)', border: '1.5px solid rgba(107,143,113,0.28)', borderRadius: '20px', cursor: 'pointer', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: '8px', transition: 'all 0.15s' }}>
+                    <span style={{ fontSize: '32px', lineHeight: 1 }}>{t.icon}</span>
+                    <span style={{ fontSize: '15px', fontWeight: 800, color: '#A8C5AC' }}>{t.label}</span>
+                    <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>{t.sub}</span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      }
+
+      // ── WAIST VALUE ───────────────────────────────────────────────────────────
+      if (sheet.step === 'waist-value') {
+        const diff = bioNumVal - 90;
+        const waistMsg = diff < 0 ? "Moving in the right direction. Waist reduction often reflects deeper metabolic improvements." :
+                         diff > 0 ? "One measurement is just one data point. Stay consistent." :
+                                    "Holding steady. Small changes often reflect meaningful metabolic improvements.";
+        return (
+          <>
+            <HeroImageBand imgSrc={BIOMARKER_IMAGES.waist ?? ACTION_CARD_IMAGES.biomarker} label="Waist" sublabel="Circumference" accentColor="#D4A843" />
+            <div style={{ padding: '16px 20px 28px' }}>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+                <div style={{ flex: 1, background: 'rgba(212,168,67,0.10)', border: '1px solid rgba(212,168,67,0.22)', borderRadius: '14px', padding: '12px 14px' }}>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(212,168,67,0.55)', letterSpacing: '0.10em', textTransform: 'uppercase' as const, marginBottom: '4px' }}>Last Reading</p>
+                  <p style={{ fontSize: '20px', fontWeight: 900, color: '#F0C060', letterSpacing: '-0.02em', margin: 0 }}>90 cm</p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.28)', margin: '2px 0 0' }}>1 week ago</p>
+                </div>
+                <div style={{ flex: 1, background: 'rgba(212,168,67,0.10)', border: '1px solid rgba(212,168,67,0.22)', borderRadius: '14px', padding: '12px 14px' }}>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(212,168,67,0.55)', letterSpacing: '0.10em', textTransform: 'uppercase' as const, marginBottom: '4px' }}>Change</p>
+                  <AnimatePresence mode="wait">
+                    <motion.p key={diff} initial={{ opacity: 0.6, y: -3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.1 }}
+                      style={{ fontSize: '20px', fontWeight: 900, color: diff < 0 ? '#A8C5AC' : diff > 0 ? '#C8604A' : 'rgba(255,255,255,0.5)', letterSpacing: '-0.02em', margin: 0 }}>
+                      {diff > 0 ? `+${diff}` : diff === 0 ? '—' : diff} cm
+                    </motion.p>
+                  </AnimatePresence>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.28)', margin: '2px 0 0' }}>vs last reading</p>
+                </div>
+              </div>
+              <MetricSelector val={bioNumVal} setVal={setBioNumVal} lpRef={bioLPRef} unit="cm" isDecimal={false} accentRgb="212,168,67" />
+              {/* Measure tip */}
+              <div style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.18)', borderRadius: '14px', padding: '12px 16px', marginBottom: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '18px', flexShrink: 0, marginTop: '1px' }}>📍</span>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.50)', margin: 0, lineHeight: 1.5 }}>Measure at your natural waist, just above the navel. Exhale gently before reading.</p>
+              </div>
+              <AnimatePresence mode="wait">
+                <motion.div key={waistMsg} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}
+                  style={{ background: 'rgba(212,168,67,0.09)', border: '1px solid rgba(212,168,67,0.20)', borderRadius: '14px', padding: '12px 16px', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.62)', margin: 0, fontStyle: 'italic' }}>{waistMsg}</p>
+                </motion.div>
+              </AnimatePresence>
+              <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }}
+                onClick={() => { awardPoints('biomarker', 2); setSheet({ type: 'biomarker', step: 'success', metric: 'waist', value: String(bioNumVal) }); }}
+                style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, #8A6E20 0%, #6A4E00 100%)', border: 'none', borderRadius: '16px', cursor: 'pointer', fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', boxShadow: '0 4px 20px rgba(138,110,32,0.35)' }}>
+                Save {bioNumVal} cm →
+              </motion.button>
+            </div>
+          </>
+        );
+      }
+
+      // ── BIOMARKER HUB (pick) ──────────────────────────────────────────────────
+      return (
+        <>
+          <div style={{ position: 'relative', height: '180px', overflow: 'hidden', flexShrink: 0 }}>
+            <img src={ACTION_CARD_IMAGES.biomarker} alt="Biomarkers" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(4,12,18,0.92) 100%)' }} />
+            <div style={{ position: 'absolute', bottom: '20px', left: '24px', right: '24px' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(143,168,216,0.75)', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: '3px' }}>Health Measurements</p>
+              <h3 style={{ fontSize: '22px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', margin: 0, lineHeight: 1.15 }}>Track the numbers that tell your transformation story.</h3>
+            </div>
+          </div>
+          <ActivityDateTimeSelector />
+          <div style={{ padding: '12px 20px 32px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '10px' }}>
+              {METRICS.map((m, i) => (
+                <motion.button key={m.id}
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06, duration: 0.28 }}
+                  whileHover={{ y: -2, boxShadow: `0 8px 28px ${m.accent}0.18)` }} whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setBioValue(''); setBioValue2('');
+                    if (m.id === 'weight')  { setBioNumVal(704); setSheet({ type: 'biomarker', step: 'weight-value',   metric: m.id }); }
+                    else if (m.id === 'waist')   { setBioNumVal(90);  setSheet({ type: 'biomarker', step: 'waist-value',    metric: m.id }); }
+                    else if (m.id === 'bp')      { setBioNumVal(120); setBioNum2Val(80); setSheet({ type: 'biomarker', step: 'bp-entry', metric: m.id }); }
+                    else if (m.id === 'glucose') { setBioNumVal(94);  setSheet({ type: 'biomarker', step: 'glucose-context', metric: m.id }); }
+                  }}
+                  style={{ width: '100%', padding: '16px 18px', background: `linear-gradient(135deg, ${m.accent}0.16) 0%, ${m.accent}0.08) 100%)`, border: `1.5px solid ${m.accent}0.28)`, borderRadius: '20px', cursor: 'pointer', textAlign: 'left' as const, boxShadow: `0 2px 16px rgba(0,0,0,0.2)` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: `${m.accent}0.18)`, border: `1.5px solid ${m.accent}0.32)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>
+                      {m.icon}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '2px' }}>
+                        <span style={{ fontSize: '22px', fontWeight: 900, color: '#fff', letterSpacing: '-0.02em' }}>{m.lastVal}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: m.color, background: `${m.accent}0.14)`, borderRadius: '50px', padding: '2px 8px', flexShrink: 0 }}>{m.lastDelta}</span>
+                      </div>
+                      <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.32)', margin: 0, letterSpacing: '0.04em' }}>{m.label} · {m.lastAge}</p>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: m.color, background: `${m.accent}0.14)`, border: `1px solid ${m.accent}0.28)`, borderRadius: '50px', padding: '4px 10px', whiteSpace: 'nowrap' as const }}>Update</span>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ opacity: 0.25 }}><path d="M5 3.5l3.5 3.5L5 10.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </div>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    return null;
+  };
+
+  const MODAL_TITLES: Record<string, string> = {
+    meal: 'Meal', exercise: 'Exercise', water: 'Water', sleep: 'Sleep',
+    sunlight: 'Sunlight', meditation: 'Meditation', mood: 'Mood', biomarker: 'Biomarkers',
+  };
+
+  const isSuccess = 'step' in sheet && (sheet as { step: string }).step === 'success';
+
+  return (
+    <AnimatePresence>
+      {/* Backdrop */}
+      <motion.div key="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+        onClick={close}
+        style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(4,10,6,0.82)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }} />
+
+      {/* Modal panel */}
+      <motion.div key="modal-panel"
+        initial={{ opacity: 0, scale: 0.94, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 16 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 320, mass: 0.8 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 501, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px', pointerEvents: 'none',
+        }}
+      >
+        <div style={{
+          pointerEvents: 'auto',
+          width: '100%', maxWidth: '760px',
+          background: 'linear-gradient(160deg, #0a1a0d 0%, #0e1c10 50%, #0c1318 100%)',
+          borderRadius: '28px',
+          overflow: 'hidden',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.07)',
+          maxHeight: '90vh',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Unified modal header — always visible except on success */}
+          {!isSuccess && (() => {
+            const sheetWithStep = sheet as { step?: string; type: string };
+            const currentStep = sheetWithStep.step ?? '';
+            // Back destinations per flow
+            const backMap: Record<string, Record<string, string>> = {
+              meal: {
+                'plan-meal': 'slot-select', 'adherence': 'plan-meal', 'adherence-changes': 'adherence',
+                'components': 'adherence', 'portion': 'components', 'custom-meal': 'slot-select',
+              },
+              exercise: { duration: 'pick', intensity: 'duration', reflection: 'intensity' },
+              water: { context: 'pick' },
+              sleep: { quality: 'bedtime', interruptions: 'quality', 'sunlight-prompt': 'interruptions' },
+              meditation: { 'log-duration': 'pick', feeling: 'pick', 'session-prep': 'feeling', 'post-feeling': 'active' },
+              mood: { influences: 'pick', reflection: 'influences' },
+              biomarker: {
+                'glucose-context': 'pick', 'glucose-value': 'glucose-context',
+                'bp-entry': 'pick',
+                'weight-value': 'pick', 'weight-timing': 'weight-value',
+                'waist-value': 'pick',
+              },
+            };
+            const entrySteps: Record<string, string> = {
+              meal: 'slot-select', exercise: 'pick', water: 'pick', sleep: 'bedtime',
+              sunlight: 'pick', meditation: 'pick', mood: 'pick', biomarker: 'pick',
+            };
+            const backStep = backMap[sheet.type]?.[currentStep];
+            const isEntry = currentStep === (entrySteps[sheet.type] ?? '') || !currentStep;
+            // Points available for this category
+            const catProgress = categoryProgress.find(c => {
+              const k = c.category;
+              return k === sheet.type || (k === 'meals' && sheet.type === 'meal') || (k === 'biomarkers' && sheet.type === 'biomarker');
+            });
+            const earnedSoFar = (catProgress?.current ?? 0) * 2;
+            const capForCat = catProgress?.hplusMax ?? 2;
+            const remainingPts = Math.max(0, capForCat - earnedSoFar);
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px 12px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                {/* Back / close */}
+                {!isEntry && backStep ? (
+                  <button onClick={() => setSheet({ ...sheet, step: backStep as never } as never)}
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '16px', flexShrink: 0 }}>
+                    ‹
+                  </button>
+                ) : (
+                  <button onClick={close}
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '18px', flexShrink: 0 }}>
+                    ×
+                  </button>
+                )}
+                {/* Activity label */}
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.06em', textTransform: 'uppercase' as const, flex: 1 }}>
+                  {MODAL_TITLES[sheet.type] ?? sheet.type}
+                </span>
+                {/* H+ reward pill */}
+                {remainingPts > 0 ? (
+                  <div style={{ background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.28)', borderRadius: '20px', padding: '4px 12px', flexShrink: 0 }}>
+                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#D4A843' }}>+{remainingPts} H+ available</span>
+                  </div>
+                ) : (
+                  <div style={{ background: 'rgba(107,143,113,0.1)', border: '1px solid rgba(107,143,113,0.25)', borderRadius: '20px', padding: '4px 12px', flexShrink: 0 }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#A8C5AC' }}>✓ Cap reached</span>
+                  </div>
+                )}
+                {/* Close when navigating mid-flow */}
+                {!isEntry && (
+                  <button onClick={close}
+                    style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '15px', flexShrink: 0 }}>
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Scrollable content */}
+          <div style={{ overflowY: 'auto', scrollbarWidth: 'none' as const, flex: 1 }}>
+            <AnimatePresence mode="wait">
+              <motion.div key={`${sheet.type}-${('step' in sheet && sheet) ? (sheet as { step: string }).step : ''}`}
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.22 }}>
+                {renderContent()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EARN TODAY'S H+ CAROUSEL — 9 premium cinematic action cards
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface EarnCarouselProps {
+  categoryProgress: CategoryProgress[];
+  hplus: HPlusEngineState;
+  onOpen: (sheet: LoggingSheet) => void;
+  loggedToday: Set<string>;
+}
+
+function EarnTodayCarousel({ categoryProgress, hplus, onOpen, loggedToday }: EarnCarouselProps) {
+  const todayPct = Math.round((hplus.todayPoints / hplus.todayMax) * 100);
+
+  const cards: Array<{
+    id: string;
+    label: string;
+    sublabel: string;
+    imgSrc: string;
+    status: string;
+    statusDone: boolean;
+    action: () => void;
+    isNudges?: boolean;
+  }> = [
+    ...categoryProgress.map(cat => {
+      const isDone = cat.current >= cat.max;
+      const singularKey = cat.category === 'meals' ? 'meal' : cat.category === 'biomarkers' ? 'biomarker' : cat.category;
+      const hasLogged = loggedToday.has(singularKey);
+      const earned = cat.current * 2;
+      const statusText = isDone ? 'Completed' : hasLogged ? `${earned}/${cat.hplusMax} H+` : `${cat.hplusMax} H+ available`;
+      return {
+        id: cat.category,
+        label: cat.label,
+        sublabel: isDone ? 'Done for today' : 'Tap to log',
+        imgSrc: ACTION_CARD_IMAGES[(cat.category === 'meals' ? 'meal' : cat.category === 'biomarkers' ? 'biomarker' : cat.category) as ActivityCategory] ?? ACTION_CARD_IMAGES.meal,
+        status: statusText,
+        statusDone: isDone,
+        action: () => {
+          // store uses plural keys; modal uses singular — match both
+          const c = cat.category;
+          if (c === 'meals' || c === 'meal') onOpen({ type: 'meal', step: 'slot-select' });
+          else if (c === 'exercise') onOpen({ type: 'exercise', step: 'pick' });
+          else if (c === 'water') onOpen({ type: 'water', step: 'pick' });
+          else if (c === 'sleep') onOpen({ type: 'sleep', step: 'bedtime' });
+          else if (c === 'sunlight') onOpen({ type: 'sunlight', step: 'pick' });
+          else if (c === 'meditation') onOpen({ type: 'meditation', step: 'pick' });
+          else if (c === 'mood') onOpen({ type: 'mood', step: 'pick' });
+          else if (c === 'biomarkers' || c === 'biomarker') onOpen({ type: 'biomarker', step: 'pick' });
+        },
+      };
+    }),
+    {
+      id: 'nudges',
+      label: 'Daily Nudges',
+      sublabel: 'Your reminders',
+      imgSrc: ACTION_CARD_IMAGES.nudges,
+      status: '3 active',
+      statusDone: false,
+      action: () => { window.location.href = '/nudges'; },
+      isNudges: true,
+    },
+  ];
+
+  return (
+    <div>
+      {/* Section header + H+ progress */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '12px', gap: '12px' }}>
+          <div>
+            <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.60)', letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: '3px' }}>Today&apos;s H+ · {hplus.streak}-day streak 🔥</p>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', margin: 0 }}>Earn Today&apos;s H+</h3>
+          </div>
+          <div style={{ flexShrink: 0, textAlign: 'right' as const }}>
+            <p style={{ fontSize: '22px', fontWeight: 900, color: '#D4A843', letterSpacing: '-0.04em', lineHeight: 1, margin: 0 }}>{hplus.todayPoints}<span style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.35)' }}>/{hplus.todayMax}</span></p>
+            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: '2px' }}>H+ today</p>
+          </div>
+        </div>
+        {/* Progress bar */}
+        <div style={{ height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+          <motion.div initial={{ width: 0 }} animate={{ width: `${todayPct}%` }} transition={{ duration: 1, ease: 'easeOut' }}
+            style={{ height: '100%', background: 'linear-gradient(90deg, var(--color-sage), #D4A843)', borderRadius: '2px', boxShadow: '0 0 8px rgba(212,168,67,0.4)' }} />
+        </div>
+      </div>
+
+      {/* Cinematic card carousel — horizontal scroll */}
+      <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' as const, WebkitOverflowScrolling: 'touch' as const, marginLeft: '-1px', paddingLeft: '1px' } as React.CSSProperties}>
+        {cards.map((card, idx) => (
+          <motion.button
+            key={card.id}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.04, duration: 0.35 }}
+            whileHover={{ y: -5, boxShadow: '0 20px 50px rgba(0,0,0,0.60)' }}
+            whileTap={{ scale: 0.97 }}
+            onClick={card.action}
+            style={{
+              flexShrink: 0,
+              width: '200px',
+              height: '250px',
+              padding: 0,
+              border: 'none',
+              borderRadius: '20px',
+              overflow: 'hidden',
+              cursor: 'pointer',
+              position: 'relative' as const,
+              background: '#111',
+              boxShadow: card.statusDone
+                ? '0 4px 24px rgba(107,143,113,0.25), 0 0 0 1.5px rgba(107,143,113,0.4)'
+                : '0 4px 20px rgba(0,0,0,0.40), 0 0 0 1px rgba(255,255,255,0.06)',
+            }}
+          >
+            {/* Full-bleed image */}
+            <img
+              src={card.imgSrc}
+              alt={card.label}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 25%', display: 'block', transition: 'transform 0.5s ease', transform: 'scale(1)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.06)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)'; }}
+            />
+
+            {/* Cinematic gradient overlay */}
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(4,12,6,0.55) 45%, rgba(4,12,6,0.90) 100%)' }} />
+
+            {/* Completion overlay */}
+            {card.statusDone && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(107,143,113,0.12)' }} />
+            )}
+
+            {/* Status pill — top right */}
+            <div style={{
+              position: 'absolute', top: '12px', right: '12px',
+              background: card.statusDone ? 'rgba(107,143,113,0.85)' : 'rgba(0,0,0,0.52)',
+              backdropFilter: 'blur(8px)',
+              border: card.statusDone ? '1px solid rgba(168,205,172,0.4)' : '1px solid rgba(255,255,255,0.14)',
+              borderRadius: '20px', padding: '4px 10px',
+            }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: card.statusDone ? '#fff' : 'rgba(255,255,255,0.85)', letterSpacing: '0.02em', whiteSpace: 'nowrap' as const }}>
+                {card.statusDone ? '✓ Done' : card.status}
+              </span>
+            </div>
+
+            {/* Bottom content */}
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '14px 16px 18px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.5)', marginBottom: '4px', letterSpacing: '0.04em' }}>{card.sublabel}</p>
+              <p style={{ fontSize: '20px', fontWeight: 900, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1, marginBottom: card.isNudges ? 0 : '10px' }}>{card.label}</p>
+              {!card.isNudges && !card.statusDone && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '5px',
+                  background: 'rgba(212,168,67,0.18)', border: '1px solid rgba(212,168,67,0.35)',
+                  borderRadius: '12px', padding: '5px 10px',
+                }}>
+                  <Zap size={10} color="#D4A843" fill="#D4A843" />
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#D4A843' }}>+2 H+</span>
+                </div>
+              )}
+              {card.statusDone && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(107,143,113,0.2)', border: '1px solid rgba(107,143,113,0.4)', borderRadius: '12px', padding: '5px 10px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#A8C5AC' }}>Completed</span>
+                </div>
+              )}
+            </div>
+          </motion.button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DAILY OPERATIONS SECTION — premium execution layer for all monthly pages
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DailyOperationsSection({ monthNum }: { monthNum: number }) {
+  const storeSnap = useHPlusStore();
+  const hplus = storeSnap.hplus;
+  const categories = storeSnap.categories;
+  const loggedToday = storeSnap.loggedToday;
+
+  const setHplus: React.Dispatch<React.SetStateAction<HPlusEngineState>> = () => {};
+  const setCategoryProgress: React.Dispatch<React.SetStateAction<CategoryProgress[]>> = () => {};
+
+  const [sheet, setSheet] = useState<LoggingSheet>({ type: 'closed' });
+
+  const todayPct = Math.round((hplus.todayPoints / hplus.todayMax) * 100);
+  const completedCount = categories.filter(c => c.current >= c.max).length;
+  const totalCount = categories.length;
+
+  const CHECKLIST = [
+    { label: 'Meals logged',         key: 'meals',       done: (categories.find(c => c.category === 'meals')?.current ?? 0) > 0 },
+    { label: 'Water goal reached',   key: 'water',       done: (categories.find(c => c.category === 'water')?.current ?? 0) >= (categories.find(c => c.category === 'water')?.max ?? 1) },
+    { label: 'Mood check-in',        key: 'mood',        done: (categories.find(c => c.category === 'mood')?.current ?? 0) > 0 },
+    { label: 'Sleep logged',         key: 'sleep',       done: (categories.find(c => c.category === 'sleep')?.current ?? 0) > 0 },
+    { label: 'Biomarkers pending',   key: 'biomarkers',  done: (categories.find(c => c.category === 'biomarkers')?.current ?? 0) >= (categories.find(c => c.category === 'biomarkers')?.max ?? 5) },
+  ];
+
+  return (
+    <>
+      <style>{`
+        .dos-mobile-only { display: block; }
+        .dos-desktop-only { display: none; }
+
+        @keyframes dos-ring-fill { from { stroke-dashoffset: 226; } to { stroke-dashoffset: var(--dos-ring-offset); } }
+        @keyframes dos-fade-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes dos-pulse-ring {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(107,143,113,0.30); }
+          50% { box-shadow: 0 0 0 8px rgba(107,143,113,0); }
+        }
+
+        @media (min-width: 1024px) {
+          .dos-mobile-only { display: none !important; }
+          .dos-desktop-only { display: block !important; }
+
+          .dos-dt-section {
+            background: #EEF3EF;
+            padding: 72px 64px;
+          }
+          .dos-dt-inner { max-width: 1400px; margin: 0 auto; }
+          .dos-dt-workspace {
+            display: grid;
+            grid-template-columns: 70fr 30fr;
+            gap: 32px;
+            align-items: start;
+          }
+          .dos-dt-left { display: flex; flex-direction: column; gap: 0; min-width: 0; overflow: hidden; }
+          .dos-dt-right { position: sticky; top: 88px; display: flex; flex-direction: column; gap: 20px; }
+        }
+        @media (min-width: 1400px) {
+          .dos-dt-section { padding: 88px 80px; }
+          .dos-dt-workspace { gap: 40px; }
+        }
+      `}</style>
+
+      {/* ── Action logging modal ── */}
+      {sheet.type !== 'closed' && (
+        <ActionLoggingModal
+          sheet={sheet}
+          setSheet={setSheet}
+          hplus={hplus}
+          setHplus={setHplus}
+          categoryProgress={categories}
+          setCategoryProgress={setCategoryProgress}
+          onLogged={() => {}}
+        />
+      )}
+
+      {/* ═══════ MOBILE ═══════ */}
+      <div className="dos-mobile-only" style={{ padding: '0 24px 32px', background: '#EEF3EF', marginTop: '0' }}>
+        {/* Section eyebrow */}
+        <div style={{ paddingTop: '28px', marginBottom: '20px' }}>
+          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.14em', marginBottom: '5px' }}>Your Daily Operations</p>
+          <h2 style={{ fontSize: '26px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.035em', lineHeight: 1.1, marginBottom: '6px' }}>Complete Today&apos;s Journey</h2>
+          <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.55 }}>Every action today moves you closer to your health goals.</p>
+        </div>
+
+        {/* Mission Status Card — mobile first */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          style={{
+            background: 'linear-gradient(145deg, #0d1a10 0%, #162318 100%)',
+            borderRadius: '24px',
+            padding: '24px 22px',
+            marginBottom: '16px',
+            boxShadow: '0 8px 40px rgba(13,26,16,0.28)',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Ambient glow */}
+          <div style={{ position: 'absolute', top: '-40px', right: '-30px', width: '180px', height: '150px', background: 'radial-gradient(ellipse, rgba(107,143,113,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', position: 'relative' }}>
+            <div>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.55)', textTransform: 'uppercase' as const, letterSpacing: '0.12em', marginBottom: '3px' }}>Mission Status</p>
+              <p style={{ fontSize: '16px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>Today&apos;s Progress</p>
+            </div>
+            <div style={{ textAlign: 'right' as const }}>
+              <p style={{ fontSize: '11px', color: '#D4A843', fontWeight: 700, marginBottom: '2px' }}>+{hplus.todayPoints} H+ earned</p>
+              <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>today</p>
+            </div>
+          </div>
+
+          {/* Progress ring + counter row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
+            {/* SVG ring */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <svg width="88" height="88" viewBox="0 0 88 88" style={{ transform: 'rotate(-90deg)' }}>
+                <circle cx="44" cy="44" r="36" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="7" />
+                <motion.circle
+                  cx="44" cy="44" r="36"
+                  fill="none"
+                  stroke="url(#dos-m-ring-grad)"
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                  strokeDasharray="226"
+                  initial={{ strokeDashoffset: 226 }}
+                  animate={{ strokeDashoffset: 226 - (226 * todayPct / 100) }}
+                  transition={{ duration: 1.2, ease: 'easeOut' }}
+                />
+                <defs>
+                  <linearGradient id="dos-m-ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#6B8F71" />
+                    <stop offset="100%" stopColor="#D4A843" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <p style={{ fontSize: '22px', fontWeight: 900, color: '#fff', letterSpacing: '-0.04em', lineHeight: 1 }}>{completedCount}</p>
+                <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.40)', fontWeight: 600, letterSpacing: '0.04em' }}>/ {totalCount}</p>
+              </div>
+            </div>
+
+            <div>
+              <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em', marginBottom: '3px' }}>Daily Actions</p>
+              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.50)', lineHeight: 1.4 }}>
+                {completedCount === 0 ? 'Ready to start' : completedCount < totalCount ? `${totalCount - completedCount} actions remaining` : 'All actions complete!'}
+              </p>
+              {/* Progress bar */}
+              <div style={{ marginTop: '10px', height: '3px', background: 'rgba(255,255,255,0.10)', borderRadius: '2px', overflow: 'hidden', width: '140px' }}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${todayPct}%` }}
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                  style={{ height: '100%', background: 'linear-gradient(90deg, var(--color-sage), #D4A843)', borderRadius: '2px' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Checklist */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {CHECKLIST.map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0, background: item.done ? 'var(--color-sage)' : 'rgba(255,255,255,0.08)', border: item.done ? 'none' : '1.5px solid rgba(255,255,255,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {item.done && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.2 5.5L8 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                </div>
+                <span style={{ fontSize: '12px', fontWeight: item.done ? 500 : 600, color: item.done ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.80)', textDecoration: item.done ? 'line-through' : 'none' }}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Streak card — mobile */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          style={{
+            background: '#fff',
+            border: '1.5px solid var(--color-border)',
+            borderRadius: '20px',
+            padding: '18px 20px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
+          }}
+        >
+          <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: 'rgba(212,168,67,0.10)', border: '1.5px solid rgba(212,168,67,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '22px' }}>🔥</div>
+          <div>
+            <p style={{ fontSize: '20px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.03em', lineHeight: 1 }}>{hplus.streak} Day Streak</p>
+            <p style={{ fontSize: '12px', color: 'var(--color-muted)', lineHeight: 1.4, marginTop: '3px' }}>You&apos;ve completed a healthy action every day for {hplus.streak} days.</p>
+          </div>
+        </motion.div>
+
+        {/* Earn Today Carousel — mobile */}
+        <div style={{
+          background: 'linear-gradient(145deg, #0d1a10 0%, #162318 100%)',
+          borderRadius: '24px',
+          padding: '24px 22px',
+          boxShadow: '0 8px 40px rgba(13,26,16,0.28)',
+        }}>
+          <EarnTodayCarousel
+            categoryProgress={categories}
+            hplus={hplus}
+            onOpen={setSheet}
+            loggedToday={loggedToday}
+          />
+        </div>
+      </div>
+
+      {/* ═══════ DESKTOP ═══════ */}
+      <div className="dos-desktop-only">
+        <div className="dos-dt-section">
+          <div className="dos-dt-inner">
+
+            {/* Section header */}
+            <div style={{ marginBottom: '48px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.14em', marginBottom: '8px' }}>Your Daily Operations</p>
+              <h2 style={{ fontSize: '44px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.04em', lineHeight: 1.05, marginBottom: '12px' }}>Complete Today&apos;s Journey</h2>
+              <p style={{ fontSize: '16px', color: 'var(--color-muted)', lineHeight: 1.6, maxWidth: '600px' }}>
+                Every action you complete today moves you closer to your health goals.<br />
+                Small daily wins create lasting transformation.
+              </p>
+            </div>
+
+            <div className="dos-dt-workspace">
+
+              {/* LEFT 70% — Carousel */}
+              <div className="dos-dt-left">
+                <div style={{
+                  background: 'linear-gradient(145deg, #0d1a10 0%, #162318 100%)',
+                  borderRadius: '28px',
+                  padding: '36px 40px',
+                  boxShadow: '0 16px 64px rgba(13,26,16,0.30)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}>
+                  {/* Ambient glow top-right */}
+                  <div style={{ position: 'absolute', top: '-60px', right: '-40px', width: '320px', height: '240px', background: 'radial-gradient(ellipse, rgba(107,143,113,0.16) 0%, transparent 65%)', pointerEvents: 'none' }} />
+                  {/* Ambient glow bottom-left */}
+                  <div style={{ position: 'absolute', bottom: '-40px', left: '20px', width: '200px', height: '160px', background: 'radial-gradient(ellipse, rgba(212,168,67,0.10) 0%, transparent 65%)', pointerEvents: 'none' }} />
+
+                  <div style={{ position: 'relative' }}>
+                    <EarnTodayCarousel
+                      categoryProgress={categories}
+                      hplus={hplus}
+                      onOpen={setSheet}
+                      loggedToday={loggedToday}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT 30% — Mission Status */}
+              <div className="dos-dt-right">
+
+                {/* Mission Status Card */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.55 }}
+                  style={{
+                    background: 'linear-gradient(145deg, #0d1a10 0%, #162318 100%)',
+                    borderRadius: '24px',
+                    padding: '28px 26px',
+                    boxShadow: '0 12px 48px rgba(13,26,16,0.28)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Ambient glow */}
+                  <div style={{ position: 'absolute', top: '-40px', right: '-20px', width: '200px', height: '150px', background: 'radial-gradient(ellipse, rgba(107,143,113,0.20) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+                  {/* Header */}
+                  <div style={{ marginBottom: '24px', position: 'relative' }}>
+                    <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.55)', textTransform: 'uppercase' as const, letterSpacing: '0.13em', marginBottom: '4px' }}>Mission Status</p>
+                    <p style={{ fontSize: '18px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>Today&apos;s Progress</p>
+                  </div>
+
+                  {/* Progress ring — centred */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <svg width="120" height="120" viewBox="0 0 120 120" style={{ transform: 'rotate(-90deg)' }}>
+                        <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="9" />
+                        <motion.circle
+                          cx="60" cy="60" r="50"
+                          fill="none"
+                          stroke="url(#dos-dt-ring-grad)"
+                          strokeWidth="9"
+                          strokeLinecap="round"
+                          strokeDasharray="314"
+                          initial={{ strokeDashoffset: 314 }}
+                          animate={{ strokeDashoffset: 314 - (314 * todayPct / 100) }}
+                          transition={{ duration: 1.4, ease: 'easeOut' }}
+                        />
+                        <defs>
+                          <linearGradient id="dos-dt-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#6B8F71" />
+                            <stop offset="100%" stopColor="#D4A843" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                        <p style={{ fontSize: '30px', fontWeight: 900, color: '#fff', letterSpacing: '-0.05em', lineHeight: 1 }}>
+                          {completedCount}<span style={{ fontSize: '16px', fontWeight: 600, color: 'rgba(255,255,255,0.35)' }}>/{totalCount}</span>
+                        </p>
+                        <p style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.40)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', textAlign: 'center' as const }}>Daily Actions<br />Completed</p>
+                      </div>
+                    </div>
+
+                    {/* H+ today */}
+                    <div style={{ marginTop: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(212,168,67,0.14)', border: '1px solid rgba(212,168,67,0.28)', borderRadius: '20px', padding: '6px 14px' }}>
+                      <Zap size={12} color="#D4A843" fill="#D4A843" />
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: '#D4A843' }}>+{hplus.todayPoints} H+ earned today</span>
+                    </div>
+                  </div>
+
+                  {/* Checklist */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
+                    {CHECKLIST.map((item, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0, background: item.done ? 'var(--color-sage)' : 'rgba(255,255,255,0.07)', border: item.done ? 'none' : '1.5px solid rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: item.done ? 'dos-pulse-ring 2.5s ease-in-out infinite' : 'none' }}>
+                          {item.done && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                        </div>
+                        <span style={{ fontSize: '13px', fontWeight: item.done ? 400 : 600, color: item.done ? 'rgba(255,255,255,0.38)' : 'rgba(255,255,255,0.82)', textDecoration: item.done ? 'line-through' : 'none' }}>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+
+                {/* Daily Streak card */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.55, delay: 0.1 }}
+                  style={{
+                    background: '#fff',
+                    border: '1.5px solid var(--color-border)',
+                    borderRadius: '20px',
+                    padding: '22px 24px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '12px' }}>
+                    <div style={{ width: '52px', height: '52px', borderRadius: '17px', background: 'rgba(212,168,67,0.10)', border: '1.5px solid rgba(212,168,67,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '24px' }}>🔥</div>
+                    <div>
+                      <p style={{ fontSize: '22px', fontWeight: 900, color: 'var(--color-ink)', letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '4px' }}>{hplus.streak} Day Streak</p>
+                      <p style={{ fontSize: '12px', color: 'var(--color-muted)', lineHeight: 1.5 }}>
+                        You have completed at least one healthy action every day for the last {hplus.streak} days.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Streak bar */}
+                  <div style={{ height: '5px', background: 'var(--color-border)', borderRadius: '3px', overflow: 'hidden', marginTop: '4px' }}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min((hplus.streak / 30) * 100, 100)}%` }}
+                      transition={{ duration: 1, ease: 'easeOut' }}
+                      style={{ height: '100%', background: 'linear-gradient(90deg, var(--color-sage), #D4A843)', borderRadius: '3px' }}
+                    />
+                  </div>
+                  <p style={{ fontSize: '10px', color: 'var(--color-muted)', marginTop: '6px', fontWeight: 600 }}>{hplus.streak} / 30 days this month</p>
+                </motion.div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ---- Overview Content ----
-function OverviewContent() {
-  const [dtJourneyPhase, setDtJourneyPhase] = useState(2);
+function OverviewContent({ overviewState = 'active', setOverviewState }: { overviewState?: OverviewState; setOverviewState?: (s: OverviewState) => void }) {
+  const isPreStarted = overviewState === 'pre_started';
+  const [dtJourneyPhase, setDtJourneyPhase] = useState(isPreStarted ? 1 : 2);
   const [dtStoryPhotos, setDtStoryPhotos] = useState<string[]>([]);
   const [dtStoryActiveSlot, setDtStoryActiveSlot] = useState(2);
   const dtStoryRef = useRef<HTMLInputElement>(null);
   const [activeFilter, setActiveFilter] = useState('Fitness');
   const [showSetup, setShowSetup] = useState(true);
   const [habitsChecked, setHabitsChecked] = useState([false, false, false, false, false]);
+  const [toolsPage, setToolsPage] = useState(0);
+  const directionRef = useRef(1);
+  const TOOLS_PER_PAGE = 4;
+  const TOTAL_TOOLS = 7;
+  const totalToolsPages = Math.ceil(TOTAL_TOOLS / TOOLS_PER_PAGE);
+
+  // ── Action logging engine — reads from shared store ──────────────────────
+  const storeSnap = useHPlusStore();
+  const hplus = storeSnap.hplus;
+  const categoryProgress = storeSnap.categories;
+  const loggedToday = storeSnap.loggedToday;
+
+  // setHplus / setCategoryProgress are no longer used directly —
+  // ActionLoggingModal writes through logActivity() instead.
+  // These shims satisfy the modal prop types without local state.
+  const setHplus: React.Dispatch<React.SetStateAction<HPlusEngineState>> = () => {};
+  const setCategoryProgress: React.Dispatch<React.SetStateAction<CategoryProgress[]>> = () => {};
+
+  const [sheet, setSheet] = useState<LoggingSheet>({ type: 'closed' });
+
+  const onLogged = (cat: ActivityCategory, pts: number) => {
+    logActivity(cat, pts, cat);
+  };
 
   const handleDtStoryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -5400,6 +9313,44 @@ function OverviewContent() {
 
   return (
     <div>
+
+      {/* ── Pre-Started / Active demo toggle ── */}
+      {setOverviewState && (
+        <div style={{
+          position: 'fixed', top: '66px', right: '16px', zIndex: 200,
+          display: 'flex', background: 'rgba(28,43,30,0.92)', backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(107,143,113,0.28)', borderRadius: '22px', padding: '3px', gap: '2px',
+        }}>
+          {(['pre_started', 'active'] as OverviewState[]).map(s => (
+            <button
+              key={s}
+              onClick={() => setOverviewState(s)}
+              style={{
+                padding: '5px 13px', borderRadius: '18px', border: 'none', cursor: 'pointer',
+                fontSize: '11px', fontWeight: 700, letterSpacing: '0.03em',
+                background: overviewState === s ? 'linear-gradient(135deg, #6B8F71, #4A6E50)' : 'transparent',
+                color: overviewState === s ? '#fff' : 'rgba(168,197,172,0.6)',
+                transition: 'all 0.18s ease',
+              }}
+            >
+              {s === 'pre_started' ? 'PRE-STARTED' : 'ACTIVE'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Action Logging Modal ── */}
+      {sheet.type !== 'closed' && (
+        <ActionLoggingModal
+          sheet={sheet}
+          setSheet={setSheet}
+          hplus={hplus}
+          setHplus={setHplus}
+          categoryProgress={categoryProgress}
+          setCategoryProgress={setCategoryProgress}
+          onLogged={onLogged}
+        />
+      )}
 
       <style>{`
         @keyframes slideDown { from { opacity: 0; transform: translateY(-10px) } to { opacity: 1; transform: translateY(0) } }
@@ -5485,20 +9436,24 @@ function OverviewContent() {
           .ov-dt-journey-workspace {
             display: grid;
             grid-template-columns: 65fr 35fr;
-            gap: 32px;
+            grid-template-rows: auto auto;
+            gap: 28px 32px;
             align-items: start;
           }
           .ov-dt-journey-left {
             display: flex;
             flex-direction: column;
-            gap: 0;
+            gap: 24px;
+            grid-column: 1;
+            grid-row: 1 / 3;
           }
-          .ov-dt-journey-right {
-            position: sticky;
-            top: 88px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
+          .ov-dt-journey-right-top {
+            grid-column: 2;
+            grid-row: 1;
+          }
+          .ov-dt-journey-right-bottom {
+            grid-column: 2;
+            grid-row: 2;
           }
 
           /* ── Story Section desktop grid (70/30) ── */
@@ -5547,6 +9502,58 @@ function OverviewContent() {
             gap: 14px;
           }
         }
+
+        /* ── Your-Tools carousel (yt-*) ── desktop only */
+        @media (min-width: 1024px) {
+          .yt-carousel-outer {
+            position: relative;
+            overflow: hidden;
+          }
+          .yt-carousel-track {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+          }
+          .yt-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #fff;
+            border: 1px solid var(--color-border);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--color-muted);
+            transition: color 0.15s, box-shadow 0.15s;
+            z-index: 2;
+          }
+          .yt-arrow:hover { color: var(--color-sage); box-shadow: 0 4px 18px rgba(0,0,0,0.18); }
+          .yt-arrow-prev { left: -20px; }
+          .yt-arrow-next { right: -20px; }
+          .yt-dots {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 18px;
+          }
+          .yt-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-border);
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            transition: background 0.2s;
+          }
+          .yt-dot-active { background: var(--color-sage); }
+        }
       `}</style>
 
       {/* ══════════════════════════════════════
@@ -5590,76 +9597,59 @@ function OverviewContent() {
           }}>
             {/* Programme context pill */}
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', borderRadius: '20px', padding: '4px 12px', alignSelf: 'flex-start', marginBottom: '4px' }}>
-              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F0C96A', animation: 'pulseRing 2s infinite' }} />
-              <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.95)', letterSpacing: '0.02em' }}>Day 14 of 30 · Build Healthy Habits</span>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: isPreStarted ? '#A8C5AC' : '#F0C96A', animation: 'pulseRing 2s infinite' }} />
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.95)', letterSpacing: '0.02em' }}>
+                {isPreStarted ? 'Personalised for you · 6-Month Programme' : 'Day 14 of 30 · Build Healthy Habits'}
+              </span>
             </div>
             <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#fff', letterSpacing: '-0.025em', lineHeight: 1.2, margin: 0 }}>
-              {greeting}, Priya
+              {isPreStarted ? 'Your health transformation starts today.' : `${greeting}, Priya`}
             </h1>
             <p className="ov-hero-subtitle" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.55, margin: 0, maxWidth: '320px' }}>
-              {daySubtitle}
+              {isPreStarted
+                ? "Over the next 6 months you’ll work alongside your coach to improve your habits, biomarkers, energy and long-term health."
+                : daySubtitle}
             </p>
             {/* Health Goals row */}
             <div style={{ marginTop: '10px', marginBottom: '2px' }}>
-              <p style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Your Health Goal</p>
+              <p style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Your Health Goals</p>
               <div style={{ display: 'flex', gap: '8px' }}>
-                {/* Goal 1: Reverse Diabetes */}
                 <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.15, ease: 'easeOut' }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '7px',
-                    background: 'rgba(255,255,255,0.08)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: '999px',
-                    padding: '5px 12px 5px 6px',
-                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '999px', padding: '5px 12px 5px 6px' }}
                 >
-                  <motion.div
-                    animate={{ y: [0, -2, 0] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.6 }}
-                    style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(200,96,74,0.22)', border: '1px solid rgba(200,96,74,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', flexShrink: 0 }}
-                  >🔥</motion.div>
+                  <motion.div animate={{ y: [0, -2, 0] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 0.6 }} style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(200,96,74,0.22)', border: '1px solid rgba(200,96,74,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', flexShrink: 0 }}>🔥</motion.div>
                   <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.92)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>Reverse Diabetes</span>
                 </motion.div>
-                {/* Goal 2: Lose Weight */}
                 <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.25, ease: 'easeOut' }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '7px',
-                    background: 'rgba(255,255,255,0.08)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: '999px',
-                    padding: '5px 12px 5px 6px',
-                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '999px', padding: '5px 12px 5px 6px' }}
                 >
-                  <motion.div
-                    animate={{ y: [0, -2, 0] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1.4 }}
-                    style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(107,143,113,0.22)', border: '1px solid rgba(107,143,113,0.32)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', flexShrink: 0 }}
-                  >⚖️</motion.div>
+                  <motion.div animate={{ y: [0, -2, 0] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1.4 }} style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(107,143,113,0.22)', border: '1px solid rgba(107,143,113,0.32)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', flexShrink: 0 }}>⚖️</motion.div>
                   <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.92)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>Lose Weight</span>
                 </motion.div>
               </div>
             </div>
-            {/* Inline month progress bar */}
-            <div style={{ marginTop: '6px' }}>
-              <div style={{ height: '3px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', overflow: 'hidden', maxWidth: '200px' }}>
-                <div style={{ height: '100%', width: '47%', background: 'rgba(255,255,255,0.85)', borderRadius: '2px' }} />
+            {/* Progress indicator or programme stats */}
+            {isPreStarted ? (
+              <div style={{ marginTop: '10px', display: 'flex', gap: '12px' }}>
+                {[{ v: '6 Months', l: 'Programme' }, { v: '180 Days', l: 'Journey' }, { v: 'Dr. Ananya', l: 'Your Coach' }].map(s => (
+                  <div key={s.l} style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '10px', padding: '8px 12px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: 800, color: '#A8C5AC', letterSpacing: '-0.01em', lineHeight: 1 }}>{s.v}</p>
+                    <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginTop: '3px', fontWeight: 500 }}>{s.l}</p>
+                  </div>
+                ))}
               </div>
-              <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '4px', letterSpacing: '0.02em' }}>47% of Month 2 complete</p>
-            </div>
+            ) : (
+              <div style={{ marginTop: '6px' }}>
+                <div style={{ height: '3px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', overflow: 'hidden', maxWidth: '200px' }}>
+                  <div style={{ height: '100%', width: '47%', background: 'rgba(255,255,255,0.85)', borderRadius: '2px' }} />
+                </div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '4px', letterSpacing: '0.02em' }}>47% of Month 2 complete</p>
+              </div>
+            )}
           </div>
 
           {/* RIGHT: desktop-only transformation snapshot panel */}
@@ -5704,11 +9694,37 @@ function OverviewContent() {
         </div>{/* end ov-hero-split-inner */}
       </div>
 
+      {/* ── Mobile: pre-started CTA strip below hero ── */}
+      {isPreStarted && (
+        <div style={{ padding: '16px 20px 0', background: 'var(--color-surface)' }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <a href="/today?tab=month1" style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+              padding: '13px 18px', background: 'linear-gradient(135deg, var(--color-sage), var(--color-sage-dark))',
+              color: '#fff', borderRadius: '14px', fontWeight: 800, fontSize: '14px',
+              textDecoration: 'none', boxShadow: '0 4px 16px rgba(107,143,113,0.35)', letterSpacing: '-0.01em',
+            }}>
+              Start Month 1 <ArrowRight size={15} strokeWidth={2.5} />
+            </a>
+            <button
+              onClick={() => { const el = document.getElementById('ov-ps-journey'); el?.scrollIntoView({ behavior: 'smooth' }); }}
+              style={{
+                padding: '13px 18px', background: 'transparent', border: '1.5px solid var(--color-border)',
+                borderRadius: '14px', color: 'var(--color-ink)', fontWeight: 700, fontSize: '13px', cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Explore Journey
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Desktop body wrapper ── */}
       <div className="ov-body" style={{ padding: '0' }}>
 
       {/* S2: Journey Roadmap — full width, premium breathing room */}
-      <div className="ov-s2-journey" style={{ padding: '20px 28px 0', background: 'var(--color-surface)' }}>
+      <div id="ov-ps-journey" className="ov-s2-journey" style={{ padding: '20px 28px 0', background: 'var(--color-surface)' }}>
         <JourneyIndicator />
       </div>
 
@@ -5828,37 +9844,56 @@ function OverviewContent() {
       <div className="ov-s4-grid" style={{ padding: '0' }}>
         <div>
 
-      {/* Section B: Today's Focus */}
+      {/* Section B: Today's Focus / What Day 1 Looks Like */}
       <div style={{ padding: '20px 24px 0' }}>
         <div style={{
           background: 'linear-gradient(135deg, #1C2B1E 0%, #3A5C3E 100%)',
-          borderRadius: '20px',
-          padding: '22px 24px',
+          borderRadius: '20px', padding: '22px 24px',
           boxShadow: '0 4px 24px rgba(28,43,30,0.18)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
-                <Target size={14} color="#F0C96A" />
-                <span style={{ fontSize: '10px', fontWeight: 700, color: '#F0C96A', textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>
-                  Your focus for today
-                </span>
+          {isPreStarted ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '12px' }}>
+                <Target size={14} color="#A8C5AC" />
+                <span style={{ fontSize: '10px', fontWeight: 700, color: '#A8C5AC', textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>What Day 1 Looks Like</span>
               </div>
-              <p style={{ fontSize: '20px', fontWeight: 800, color: '#fff', lineHeight: 1.2, marginBottom: '16px', letterSpacing: '-0.02em' }}>
-                Hit 7,000 steps before dinner
-              </p>
-              {/* Progress bar */}
-              <div style={{ height: '5px', background: 'rgba(255,255,255,0.15)', borderRadius: '3px', overflow: 'hidden', marginBottom: '6px' }}>
-                <div style={{ height: '100%', width: '74%', background: 'linear-gradient(90deg, #D4A843 0%, #F0C96A 100%)', borderRadius: '3px' }} />
+              <p style={{ fontSize: '17px', fontWeight: 800, color: '#fff', lineHeight: 1.3, marginBottom: '16px', letterSpacing: '-0.02em' }}>Your first day is about understanding your health — not perfecting it.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {[
+                  'Complete your baseline health assessment',
+                  'Review your biomarker report with Dr. Ananya',
+                  'Define your top 3 health priorities',
+                  'Log your first meal and sleep',
+                ].map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(168,197,172,0.20)', border: '1.5px solid rgba(168,197,172,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3 5.5L8 1" stroke="#A8C5AC" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </div>
+                    <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.82)', lineHeight: 1.4 }}>{item}</span>
+                  </div>
+                ))}
               </div>
-              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', letterSpacing: '0.01em' }}>74% · 1,760 steps to go</p>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '14px', fontStyle: 'italic' }}>Your coach will guide you through each step.</p>
             </div>
-            {/* Step count */}
-            <div style={{ textAlign: 'center' as const, flexShrink: 0, background: 'rgba(255,255,255,0.08)', borderRadius: '14px', padding: '12px 16px' }}>
-              <p style={{ fontSize: '26px', fontWeight: 800, color: '#F0C96A', letterSpacing: '-0.03em', lineHeight: 1 }}>5,240</p>
-              <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '3px', fontWeight: 500 }}>/ 7,000 steps</p>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '8px' }}>
+                  <Target size={14} color="#F0C96A" />
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#F0C96A', textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>Your focus for today</span>
+                </div>
+                <p style={{ fontSize: '20px', fontWeight: 800, color: '#fff', lineHeight: 1.2, marginBottom: '16px', letterSpacing: '-0.02em' }}>Hit 7,000 steps before dinner</p>
+                <div style={{ height: '5px', background: 'rgba(255,255,255,0.15)', borderRadius: '3px', overflow: 'hidden', marginBottom: '6px' }}>
+                  <div style={{ height: '100%', width: '74%', background: 'linear-gradient(90deg, #D4A843 0%, #F0C96A 100%)', borderRadius: '3px' }} />
+                </div>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', letterSpacing: '0.01em' }}>74% · 1,760 steps to go</p>
+              </div>
+              <div style={{ textAlign: 'center' as const, flexShrink: 0, background: 'rgba(255,255,255,0.08)', borderRadius: '14px', padding: '12px 16px' }}>
+                <p style={{ fontSize: '26px', fontWeight: 800, color: '#F0C96A', letterSpacing: '-0.03em', lineHeight: 1 }}>5,240</p>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '3px', fontWeight: 500 }}>/ 7,000 steps</p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -5909,7 +9944,7 @@ function OverviewContent() {
           }}>
             <div style={{ position: 'absolute', top: '-30px', right: '-20px', width: '150px', height: '150px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(107,143,113,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
             <div style={{ position: 'relative' }}>
-              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.65)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: '18px' }}>Message from your coach</p>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.65)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: '18px' }}>{isPreStarted ? 'A welcome from your coach' : 'Message from your coach'}</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
                 <div style={{ position: 'relative', flexShrink: 0 }}>
                   <div style={{ width: '60px', height: '60px', borderRadius: '50%', overflow: 'hidden', border: '2.5px solid rgba(168,197,172,0.35)' }}>
@@ -5919,14 +9954,16 @@ function OverviewContent() {
                 </div>
                 <div>
                   <p style={{ fontSize: '16px', fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>Dr. Ananya Rao</p>
-                  <p style={{ fontSize: '12px', color: 'rgba(168,197,172,0.7)' }}>Your Health Coach · Available now</p>
+                  <p style={{ fontSize: '12px', color: 'rgba(168,197,172,0.7)' }}>{isPreStarted ? 'Your Health Coach · Ready to begin' : 'Your Health Coach · Available now'}</p>
                 </div>
               </div>
               <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.82)', lineHeight: 1.75, marginBottom: '22px' }}>
-                Priya, I noticed you haven&apos;t logged lunch the past 3 days. Try setting a midday reminder — even a quick log takes 30 seconds and keeps your streak alive 💚
+                {isPreStarted
+                  ? <>Hi Priya. I&apos;m genuinely excited to guide you through this journey. We&apos;ll take it one step at a time and build habits that last a lifetime. Ready when you are 💚</>
+                  : <>Priya, I noticed you haven&apos;t logged lunch the past 3 days. Try setting a midday reminder — even a quick log takes 30 seconds and keeps your streak alive 💚</>}
               </p>
               <div style={{ display: 'flex', gap: '10px' }}>
-                <a href="/coach/message" style={{
+                <a href={isPreStarted ? '/today?tab=month1' : '/coach/message'} style={{
                   display: 'inline-flex', alignItems: 'center', gap: '7px',
                   padding: '11px 22px',
                   background: 'linear-gradient(135deg, var(--color-sage) 0%, var(--color-sage-dark) 100%)',
@@ -5934,7 +9971,7 @@ function OverviewContent() {
                   fontSize: '13px', fontWeight: 700, textDecoration: 'none', cursor: 'pointer',
                   boxShadow: '0 4px 16px rgba(107,143,113,0.40)',
                 }}>
-                  Reply to Dr. Ananya <ArrowRight size={14} />
+                  {isPreStarted ? <>Start Month 1 <ArrowRight size={14} /></> : <>Reply to Dr. Ananya <ArrowRight size={14} /></>}
                 </a>
               </div>
             </div>
@@ -5950,9 +9987,9 @@ function OverviewContent() {
       <div className="ov-mobile-metrics" style={{ padding: '28px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '18px' }}>
           <div>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '3px' }}>Your performance today</p>
+            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '3px' }}>{isPreStarted ? 'What we track together' : 'Your performance today'}</p>
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>
-              Health Overview
+              {isPreStarted ? 'Health Pillars' : 'Health Overview'}
             </h2>
           </div>
           <span style={{ fontSize: '11px', color: 'var(--color-muted)', paddingBottom: '2px' }}>Updated just now</span>
@@ -5995,6 +10032,42 @@ function OverviewContent() {
             comparisonColor="#16A34A"
             encouragement="You're on a roll — keep it going at lunch!"
           />
+          {/* Daily Plan nav card */}
+          <a
+            href="/daily-plan"
+            style={{
+              minWidth: '200px',
+              flex: '0 0 200px',
+              background: 'linear-gradient(155deg, #0d2018 0%, #163826 100%)',
+              borderRadius: '20px',
+              padding: '20px',
+              boxShadow: '0 2px 12px rgba(13,32,24,0.22)',
+              textDecoration: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              transition: 'opacity 0.15s ease',
+              border: '1px solid rgba(107,143,113,0.2)',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.85'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.opacity = '1'; }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(107,143,113,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <UtensilsCrossed size={18} color="#A8C5AC" />
+              </div>
+              <ChevronRight size={16} color="rgba(168,197,172,0.5)" />
+            </div>
+            <div>
+              <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1.2, marginBottom: '8px' }}>
+                Today&apos;s Meal & Exercise Plan
+              </p>
+              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.55 }}>
+                Your full personalised daily journey — meals, movement, and recovery.
+              </p>
+            </div>
+          </a>
           {/* View Your Progress nav card */}
           <a
             href="/progress"
@@ -6069,8 +10142,8 @@ function OverviewContent() {
       {/* Section D2: Personal Patterns — mobile only */}
       <div className="ov-mobile-patterns" style={{ padding: '28px 24px 0' }}>
         <div style={{ marginBottom: '16px' }}>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '3px' }}>Discovered from your data</p>
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>Your personal patterns</h2>
+          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '3px' }}>{isPreStarted ? 'What we help you discover' : 'Discovered from your data'}</p>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>{isPreStarted ? 'Your Health Patterns' : 'Your personal patterns'}</h2>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{
@@ -6121,40 +10194,27 @@ function OverviewContent() {
       <div className="ov-prog-community-grid" style={{ padding: '0' }}>
         <div>
 
-      {/* Section E: Programme Workflows */}
+      {/* Section E: Complete Today's Journey */}
       <div style={{ padding: '28px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '3px' }}>Month 2 · Build Healthy Habits</p>
+            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '3px' }}>{isPreStarted ? 'Preview' : 'Month 2 · Build Healthy Habits'}</p>
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '4px' }}>
-              Your Health Programme
+              {isPreStarted ? 'Your Daily Coaching Experience' : 'Complete Today\'s Journey'}
             </h2>
-            {/* Principle 9: social proof */}
             <p style={{ fontSize: '12px', color: 'var(--color-muted)' }}>
-              👥 <strong style={{ color: 'var(--color-sage)' }}>847 members</strong> are on Month 2 this week
+              {isPreStarted
+                ? <>Every day you&apos;ll log actions across these 8 pillars to earn H+ points and build momentum.</>
+                : <>👥 <strong style={{ color: 'var(--color-sage)' }}>847 members</strong> logged actions today</>}
             </p>
           </div>
-          <button style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            padding: '8px 16px',
-            border: '1.5px solid var(--color-border)',
-            borderRadius: '20px',
-            background: '#fff',
-            fontSize: '12px',
-            fontWeight: 600,
-            color: 'var(--color-ink)',
-            cursor: 'pointer',
-            flexShrink: 0,
-            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-          }}>
-            <Plus size={12} />
-            Log activity
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.22)', borderRadius: '20px', padding: '6px 12px', flexShrink: 0 }}>
+            <Zap size={12} color="#D4A843" fill="#D4A843" />
+            <span style={{ fontSize: '13px', fontWeight: 800, color: '#D4A843' }}>{hplus.score} H+</span>
+          </div>
         </div>
 
-        {/* Desktop inner split: habits LEFT, toolkit RIGHT */}
+        {/* Desktop inner split: habits LEFT, actions RIGHT */}
         <div className="ov-prog-inner-split">
 
           {/* Habits card */}
@@ -6248,47 +10308,15 @@ function OverviewContent() {
           </div>
           </div>{/* end habits left */}
 
-          {/* Workflow toolkit right */}
+          {/* ── Earn Today's H+ carousel ── */}
           <div>
-          <div className="ov-workflow-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-            <WorkflowCard
-              imgSrc="https://images.unsplash.com/photo-1505576399279-565b52d4ac71?w=400&q=80"
-              icon={CheckCircle2}
-              title="Habit Tracker"
-              description="Log your daily habits and build lasting routines"
-            />
-            <WorkflowCard
-              imgSrc="https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=400&q=80"
-              icon={UtensilsCrossed}
-              title="Meal Logger"
-              description="Track meals using the Indian Plate Model"
-            />
-            <WorkflowCard
-              imgSrc="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=400&q=80"
-              icon={Footprints}
-              title="Steps & Activity"
-              description="Monitor daily movement and active minutes"
-            />
-            <WorkflowCard
-              imgSrc="https://images.unsplash.com/photo-1541480601022-2308c0f02487?w=400&q=80"
-              icon={Moon}
-              title="Sleep Tracker"
-              description="Analyse sleep quality and recovery each night"
-            />
-            <WorkflowCard
-              imgSrc="https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=400&q=80"
-              icon={Brain}
-              title="Mindfulness"
-              description="Daily breathing exercises and stress management"
-            />
-            <WorkflowCard
-              imgSrc="https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&q=80"
-              icon={FlaskConical}
-              title="Progress & Labs"
-              description="Track biomarkers and review lab results over time"
+            <EarnTodayCarousel
+              categoryProgress={categoryProgress}
+              hplus={hplus}
+              onOpen={s => setSheet(s)}
+              loggedToday={loggedToday}
             />
           </div>
-          </div>{/* end toolkit right */}
 
         </div>{/* end ov-prog-inner-split */}
       </div>
@@ -6436,10 +10464,13 @@ function OverviewContent() {
       <div className="ov-mobile-stories" style={{ padding: '28px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '18px' }}>
           <div>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '3px' }}>People like you</p>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>Member Success Stories</h2>
+            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '3px' }}>{isPreStarted ? 'They started exactly where you are' : 'People like you'}</p>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>{isPreStarted ? 'People Who Made It' : 'Member Success Stories'}</h2>
           </div>
         </div>
+        {isPreStarted && (
+          <p style={{ fontSize: '13px', color: 'var(--color-muted)', lineHeight: 1.6, marginBottom: '16px' }}>People who started exactly where you are today — and completed their transformation.</p>
+        )}
         <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
           {[
             {
@@ -6544,9 +10575,9 @@ function OverviewContent() {
 
       {/* Desktop-only: Member Success Stories showcase (large format) */}
       <div className="ov-dt-stories-section" style={{ display: 'none' }}>
-        <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '6px' }}>People like you</p>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.03em' }}>Member Success Stories</h2>
+        <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '6px' }}>{isPreStarted ? 'They started exactly where you are' : 'People like you'}</p>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: isPreStarted ? '10px' : '24px' }}>
+          <h2 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.03em' }}>{isPreStarted ? 'People Who Made It' : 'Member Success Stories'}</h2>
           <a href="/community" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-sage)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', paddingBottom: '4px' }}>
             View All Stories <ArrowRight size={14} />
           </a>
@@ -6594,94 +10625,102 @@ function OverviewContent() {
         </div>
       </div>
 
-      {/* S9: Journey Celebration Footer — celebration */}
+      {/* S9: Journey Celebration Footer / Pre-Started conversion CTA */}
       <div className="ov-footer-outer" style={{ padding: '32px 24px 40px' }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #1C2B1E 0%, #2D4A30 100%)',
-          borderRadius: '24px',
-          padding: '28px 24px',
-          color: '#fff',
-          position: 'relative',
-          overflow: 'hidden',
-        }}>
-          {/* Decorative orbs */}
-          <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(107,143,113,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: '-20px', left: '10%', width: '140px', height: '140px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,201,106,0.10) 0%, transparent 70%)', pointerEvents: 'none' }} />
-
-          {/* Desktop inner grid */}
-          <div className="ov-footer-inner-grid" style={{ position: 'relative' }}>
-
-            {/* Left: roadmap + stats */}
-            <div>
-              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: '4px' }}>Your transformation</p>
-              <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginBottom: '20px' }}>Your Journey</h3>
-              <div style={{ marginBottom: '24px' }}>
-                <JourneyIndicator dark />
-              </div>
-              <div style={{ display: 'flex', gap: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                <div>
-                  <p style={{ fontSize: '22px', fontWeight: 800, color: '#F0C96A', letterSpacing: '-0.02em', lineHeight: 1 }}>42</p>
-                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '3px' }}>of 180 days</p>
-                </div>
-                <div>
-                  <p style={{ fontSize: '22px', fontWeight: 800, color: '#A8C5AC', letterSpacing: '-0.02em', lineHeight: 1 }}>23%</p>
-                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '3px' }}>programme complete</p>
-                </div>
-                <div>
-                  <p style={{ fontSize: '22px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1 }}>14</p>
-                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '3px' }}>day streak</p>
-                </div>
-              </div>
+        {isPreStarted ? (
+          /* ── PRE-STARTED: final conversion card ── */
+          <div style={{
+            background: 'linear-gradient(135deg, #071310 0%, #0d1c10 50%, #071310 100%)',
+            borderRadius: '24px', padding: '36px 28px',
+            color: '#fff', position: 'relative', overflow: 'hidden',
+            boxShadow: '0 8px 40px rgba(7,19,16,0.40)',
+          }}>
+            <div style={{ position: 'absolute', top: '-60px', right: '-40px', width: '260px', height: '260px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(107,143,113,0.20) 0%, transparent 65%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: '-40px', left: '5%', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,168,67,0.10) 0%, transparent 65%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'relative' }}>
+              <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.65)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '12px' }}>You&apos;re Ready to Begin</p>
+              <h3 style={{ fontSize: 'clamp(22px,4vw,34px)', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '14px' }}>
+                You&apos;re ready to begin.
+              </h3>
+              <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.58)', lineHeight: 1.65, marginBottom: '28px', maxWidth: '420px' }}>
+                Your first chapter starts with understanding your health, building awareness and creating the foundation for lasting change.
+              </p>
+              <a
+                href="/today?tab=month1"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '9px',
+                  padding: '16px 28px',
+                  background: 'linear-gradient(135deg, #6B8F71 0%, #4A6E50 100%)',
+                  color: '#fff', border: 'none', borderRadius: '16px',
+                  fontSize: '16px', fontWeight: 800, textDecoration: 'none',
+                  letterSpacing: '-0.01em',
+                  boxShadow: '0 6px 28px rgba(107,143,113,0.50)',
+                  transition: 'transform 0.18s, box-shadow 0.18s',
+                }}
+                onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = '0 10px 36px rgba(107,143,113,0.60)'; }}
+                onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = '0 6px 28px rgba(107,143,113,0.50)'; }}
+              >
+                Start Month 1 — Know Your Health
+                <ArrowRight size={17} strokeWidth={2.5} />
+              </a>
             </div>
-
-            {/* Right (desktop only): encouragement + CTAs */}
-            <div className="ov-footer-cta-col" style={{
-              display: 'none',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              gap: '20px',
-            }}>
+          </div>
+        ) : (
+          /* ── ACTIVE: existing celebration footer ── */
+          <div style={{
+            background: 'linear-gradient(135deg, #1C2B1E 0%, #2D4A30 100%)',
+            borderRadius: '24px', padding: '28px 24px', color: '#fff',
+            position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(107,143,113,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: '-20px', left: '10%', width: '140px', height: '140px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,201,106,0.10) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            <div className="ov-footer-inner-grid" style={{ position: 'relative' }}>
               <div>
-                <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(168,197,172,0.7)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>Keep going</p>
-                <p style={{ fontSize: '26px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: '12px' }}>
-                  You&apos;re making<br />real progress.
-                </p>
-                <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.65, marginBottom: '24px' }}>
-                  138 days to go. Every habit you build today is a brick in the foundation of your healthiest self.
-                </p>
+                <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: '4px' }}>Your transformation</p>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginBottom: '20px' }}>Your Journey</h3>
+                <div style={{ marginBottom: '24px' }}>
+                  <JourneyIndicator dark />
+                </div>
+                <div style={{ display: 'flex', gap: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div>
+                    <p style={{ fontSize: '22px', fontWeight: 800, color: '#F0C96A', letterSpacing: '-0.02em', lineHeight: 1 }}>42</p>
+                    <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '3px' }}>of 180 days</p>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '22px', fontWeight: 800, color: '#A8C5AC', letterSpacing: '-0.02em', lineHeight: 1 }}>23%</p>
+                    <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '3px' }}>programme complete</p>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: '22px', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1 }}>14</p>
+                    <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '3px' }}>day streak</p>
+                  </div>
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <a href="/journey" style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '14px 20px', background: 'rgba(255,255,255,0.10)',
-                  border: '1px solid rgba(255,255,255,0.18)', borderRadius: '16px',
-                  textDecoration: 'none', color: '#fff',
-                  transition: 'background 0.15s ease',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.16)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.10)'; }}
-                >
-                  <span style={{ fontSize: '13px', fontWeight: 700 }}>View Your Complete Journey</span>
-                  <ArrowRight size={16} color="rgba(168,197,172,0.80)" />
-                </a>
-                <a href="/progress" style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '14px 20px', background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.10)', borderRadius: '16px',
-                  textDecoration: 'none', color: 'rgba(255,255,255,0.75)',
-                  transition: 'background 0.15s ease',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.10)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.06)'; }}
-                >
-                  <span style={{ fontSize: '13px', fontWeight: 700 }}>View Your Progress</span>
-                  <ArrowRight size={16} color="rgba(255,255,255,0.45)" />
-                </a>
+              <div className="ov-footer-cta-col" style={{ display: 'none', flexDirection: 'column', justifyContent: 'center', gap: '20px' }}>
+                <div>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(168,197,172,0.7)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>Keep going</p>
+                  <p style={{ fontSize: '26px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: '12px' }}>You&apos;re making<br />real progress.</p>
+                  <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.65, marginBottom: '24px' }}>138 days to go. Every habit you build today is a brick in the foundation of your healthiest self.</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {[
+                    { href: '/daily-plan', label: "Today's Meal & Exercise Plan", bg: 'linear-gradient(135deg, rgba(107,143,113,0.22), rgba(74,110,80,0.18))', border: 'rgba(107,143,113,0.35)', color: '#fff', hoverBg: 'linear-gradient(135deg, rgba(107,143,113,0.32), rgba(74,110,80,0.26))' },
+                    { href: '/journey', label: 'View Your Complete Journey', bg: 'rgba(255,255,255,0.10)', border: 'rgba(255,255,255,0.18)', color: '#fff', hoverBg: 'rgba(255,255,255,0.16)' },
+                    { href: '/progress', label: 'View Your Progress', bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.75)', hoverBg: 'rgba(255,255,255,0.10)' },
+                  ].map(link => (
+                    <a key={link.href} href={link.href} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', background: link.bg, border: `1px solid ${link.border}`, borderRadius: '16px', textDecoration: 'none', color: link.color, transition: 'background 0.15s ease' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = link.hoverBg; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = link.bg; }}
+                    >
+                      <span style={{ fontSize: '13px', fontWeight: 700 }}>{link.label}</span>
+                      <ArrowRight size={16} color="rgba(168,197,172,0.80)" />
+                    </a>
+                  ))}
+                </div>
               </div>
             </div>
-
-          </div>{/* end footer-inner-grid */}
-        </div>
+          </div>
+        )}
       </div>
 
       </div>{/* end ov-mobile-only */}
@@ -6721,11 +10760,11 @@ function OverviewContent() {
                   transition={{ duration: 0.5, delay: 0.1 }}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: '24px', padding: '6px 16px 6px 8px', alignSelf: 'flex-start', border: '1px solid rgba(255,255,255,0.15)' }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(240,201,106,0.22)', borderRadius: '16px', padding: '3px 8px' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F0C96A', animation: 'pulseRing 2s infinite' }} />
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#F0C96A', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>Chapter 2</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: isPreStarted ? 'rgba(168,197,172,0.20)' : 'rgba(240,201,106,0.22)', borderRadius: '16px', padding: '3px 8px' }}>
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: isPreStarted ? '#A8C5AC' : '#F0C96A', animation: 'pulseRing 2s infinite' }} />
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: isPreStarted ? '#A8C5AC' : '#F0C96A', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>{isPreStarted ? 'Enrolled' : 'Chapter 2'}</span>
                   </div>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.88)', letterSpacing: '0.01em' }}>Build Healthy Habits</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.88)', letterSpacing: '0.01em' }}>{isPreStarted ? 'Ready to begin your transformation' : 'Build Healthy Habits'}</span>
                 </motion.div>
 
                 {/* ── YOUR HEALTH GOAL capsule ── */}
@@ -6802,47 +10841,123 @@ function OverviewContent() {
                   </p>
                 </motion.div>
 
-                {/* Dominant greeting */}
+                {/* Dominant headline */}
                 <motion.h1
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.55, delay: 0.30 }}
                   style={{ fontSize: '60px', fontWeight: 900, color: '#fff', letterSpacing: '-0.045em', lineHeight: 1.0, margin: 0, textShadow: '0 4px 32px rgba(0,0,0,0.30)' }}
                 >
-                  {greeting},<br />
-                  <span style={{ background: 'linear-gradient(90deg, #fff 60%, rgba(168,197,172,0.85) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Priya</span>
+                  {isPreStarted ? (
+                    <>Your health<br /><span style={{ background: 'linear-gradient(90deg, #A8C5AC 0%, #fff 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>transformation</span><br />starts today.</>
+                  ) : (
+                    <>{greeting},<br /><span style={{ background: 'linear-gradient(90deg, #fff 60%, rgba(168,197,172,0.85) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Priya</span></>
+                  )}
                 </motion.h1>
 
-                {/* Day subtitle */}
+                {/* Subtitle */}
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.5, delay: 0.42 }}
                   style={{ fontSize: '17px', color: 'rgba(255,255,255,0.70)', lineHeight: 1.65, maxWidth: '420px', margin: 0, fontWeight: 400 }}
                 >
-                  {daySubtitle}
+                  {isPreStarted
+                    ? "Over the next 6 months you’ll work alongside your coach to improve your habits, biomarkers, energy and long-term health."
+                    : daySubtitle}
                 </motion.p>
 
-                {/* Month progress bar */}
+                {/* Progress bar or programme stats */}
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.5, delay: 0.54 }}
                   style={{ maxWidth: '360px' }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.50)', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' as const }}>Month 2 Progress</span>
-                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.70)', fontWeight: 700 }}>Day 14 of 30</span>
-                  </div>
-                  <div style={{ height: '5px', background: 'rgba(255,255,255,0.14)', borderRadius: '3px', overflow: 'hidden', animation: 'progress-glow 3s ease infinite' }}>
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: '47%' }}
-                      transition={{ duration: 1.2, delay: 0.7, ease: 'easeOut' }}
-                      style={{ height: '100%', background: 'linear-gradient(90deg, #6B8F71, #F0C96A)', borderRadius: '3px' }}
-                    />
-                  </div>
-                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginTop: '6px' }}>47% complete · 16 days remaining</p>
+                  {isPreStarted ? (
+                    <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
+                      {[{ v: '6 Months', l: 'Programme' }, { v: '180 Days', l: 'Journey' }, { v: 'Dr. Ananya', l: 'Your Coach' }].map(s => (
+                        <div key={s.l} style={{ background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(8px)', borderRadius: '12px', padding: '10px 14px' }}>
+                          <p style={{ fontSize: '15px', fontWeight: 800, color: '#A8C5AC', letterSpacing: '-0.01em', lineHeight: 1 }}>{s.v}</p>
+                          <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginTop: '4px', fontWeight: 500 }}>{s.l}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.50)', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' as const }}>Month 2 Progress</span>
+                        <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.70)', fontWeight: 700 }}>Day 14 of 30</span>
+                      </div>
+                      <div style={{ height: '5px', background: 'rgba(255,255,255,0.14)', borderRadius: '3px', overflow: 'hidden', animation: 'progress-glow 3s ease infinite' }}>
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: '47%' }}
+                          transition={{ duration: 1.2, delay: 0.7, ease: 'easeOut' }}
+                          style={{ height: '100%', background: 'linear-gradient(90deg, #6B8F71, #F0C96A)', borderRadius: '3px' }}
+                        />
+                      </div>
+                      <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginTop: '6px' }}>47% complete · 16 days remaining</p>
+                    </>
+                  )}
+                </motion.div>
+
+                {/* Desktop hero CTA */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.6, ease: 'easeOut' }}
+                  style={{ marginTop: '24px', display: 'flex', gap: '12px', alignItems: 'center' }}
+                >
+                  {isPreStarted ? (
+                    <>
+                      <a
+                        href="/today?tab=month1"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '9px',
+                          background: 'linear-gradient(135deg, #6B8F71, #4A6E50)', color: '#fff',
+                          borderRadius: '12px', padding: '13px 24px',
+                          fontWeight: 800, fontSize: '14px', textDecoration: 'none',
+                          letterSpacing: '-0.01em',
+                          boxShadow: '0 4px 20px rgba(107,143,113,0.45)',
+                          transition: 'transform 0.18s, box-shadow 0.18s',
+                        }}
+                        onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = '0 8px 28px rgba(107,143,113,0.60)'; }}
+                        onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = '0 4px 20px rgba(107,143,113,0.45)'; }}
+                      >
+                        Start Month 1 <ArrowRight size={15} strokeWidth={2.5} />
+                      </a>
+                      <button
+                        onClick={() => { const el = document.getElementById('ov-ps-journey'); el?.scrollIntoView({ behavior: 'smooth' }); }}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '7px',
+                          background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)',
+                          color: 'rgba(255,255,255,0.85)', borderRadius: '12px', padding: '13px 22px',
+                          fontSize: '14px', fontWeight: 700, cursor: 'pointer', letterSpacing: '-0.01em',
+                        }}
+                      >
+                        Explore My Journey
+                      </button>
+                    </>
+                  ) : (
+                    <a
+                      href="/today?tab=month2"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '9px',
+                        background: '#fff', color: '#1C2B1E',
+                        borderRadius: '12px', padding: '13px 24px',
+                        fontWeight: 800, fontSize: '14px', textDecoration: 'none',
+                        letterSpacing: '-0.01em',
+                        boxShadow: '0 2px 12px rgba(0,0,0,0.20)',
+                        transition: 'transform 0.18s, box-shadow 0.18s',
+                      }}
+                      onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = '0 6px 20px rgba(0,0,0,0.28)'; }}
+                      onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = '0 2px 12px rgba(0,0,0,0.20)'; }}
+                    >
+                      Continue Journey
+                      <ChevronRight size={15} strokeWidth={2.5} />
+                    </a>
+                  )}
                 </motion.div>
 
               </div>
@@ -6861,21 +10976,45 @@ function OverviewContent() {
               {/* 1+2. Journey Workspace — 65/35 grid */}
               <section className="ov-dt-section">
                 <div style={{ marginBottom: '32px' }}>
-                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: '4px' }}>Your Transformation Roadmap</p>
-                  <h2 style={{ fontSize: '26px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.03em' }}>Your Journey Experience</h2>
+                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: '4px' }}>{isPreStarted ? 'Your Transformation Blueprint' : 'Your Transformation Roadmap'}</p>
+                  <h2 style={{ fontSize: '26px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.03em' }}>{isPreStarted ? 'Your 6-Month Journey' : 'Your Journey Experience'}</h2>
                 </div>
 
                 <div className="ov-dt-journey-workspace">
 
-                  {/* LEFT 65%: Journey Indicator + Chapter Card */}
+                  {/* LEFT col (rows 1+2): Chapter card → Your Patterns */}
                   <div className="ov-dt-journey-left">
                     <JourneyIndicatorDesktop selectedPhase={dtJourneyPhase} onPhaseChange={setDtJourneyPhase} />
+
+                    {/* Your Patterns — sits directly below chapter card in left column */}
+                    <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: '22px', padding: '22px 26px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
+                      <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '2px' }}>{isPreStarted ? 'What we help you discover' : 'From your data'}</p>
+                      <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.03em', marginBottom: '18px' }}>{isPreStarted ? 'Your Health Patterns' : 'Your Patterns'}</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        {[
+                          { icon: '😴', accent: 'var(--color-sage)', bg: 'rgba(107,143,113,0.07)', border: 'rgba(107,143,113,0.14)', category: 'Sleep', headline: 'Movement improves your sleep', insight: 'You sleep 45 min longer on days you walk 7,000+ steps.', stat: '+45 min' },
+                          { icon: '🔥', accent: '#7B68EE', bg: 'rgba(123,104,238,0.07)', border: 'rgba(123,104,238,0.14)', category: 'Streaks', headline: 'Morning logging protects streaks', insight: 'Your streak has never broken on days you logged before 9am.', stat: '0 breaks' },
+                          { icon: '🥗', accent: '#B07828', bg: 'rgba(176,120,40,0.07)', border: 'rgba(176,120,40,0.14)', category: 'Nutrition', headline: 'Protein-first breakfasts improve consistency', insight: 'You log all 3 meals 4× more often on days with a high-protein breakfast.', stat: '+4 days' },
+                          { icon: '🚶', accent: '#C8604A', bg: 'rgba(200,96,74,0.07)', border: 'rgba(200,96,74,0.14)', category: 'Movement', headline: 'Afternoon walks are your highest-step sessions', insight: 'Walks between 3–5pm average 1,850 more steps than your morning walks.', stat: '+1,850 steps' },
+                        ].map((p, i) => (
+                          <div key={i} style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', background: p.bg, border: `1px solid ${p.border}`, borderRadius: '16px', padding: '16px 16px' }}>
+                            <div style={{ fontSize: '24px', lineHeight: 1, flexShrink: 0, marginTop: '1px' }}>{p.icon}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <p style={{ fontSize: '10px', fontWeight: 700, color: p.accent, textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>{p.category}</p>
+                                <p style={{ fontSize: '14px', fontWeight: 900, color: p.accent, letterSpacing: '-0.02em' }}>{p.stat}</p>
+                              </div>
+                              <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '4px', lineHeight: 1.3 }}>{p.headline}</p>
+                              <p style={{ fontSize: '12px', color: 'var(--color-muted)', lineHeight: 1.55 }}>{p.insight}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* RIGHT 35%: Today at a glance */}
-                  <div className="ov-dt-journey-right">
-
-                    {/* Card 1: Today's Habits */}
+                  {/* RIGHT top: Your Habits */}
+                  <div className="ov-dt-journey-right-top">
                     <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: '22px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
                       <div style={{ padding: '20px 22px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -6913,7 +11052,6 @@ function OverviewContent() {
                           ))}
                         </div>
                       </div>
-                      {/* Progress footer */}
                       <div style={{ borderTop: '1px solid var(--color-border)', padding: '12px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-surface)' }}>
                         <span style={{ fontSize: '12px', color: 'var(--color-muted)' }}>{habitsChecked.filter(Boolean).length} of {habits.length} done</span>
                         <div style={{ width: '80px', height: '4px', background: 'var(--color-border)', borderRadius: '2px', overflow: 'hidden' }}>
@@ -6921,60 +11059,42 @@ function OverviewContent() {
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Card 2: Health Snapshot */}
-                    <div style={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: '22px', padding: '20px 22px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
-                      <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '2px' }}>Right Now</p>
-                      <p style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '16px' }}>Health Snapshot</p>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {/* RIGHT bottom: Health Snapshot */}
+                  <div className="ov-dt-journey-right-bottom">
+                    <div style={{ background: 'linear-gradient(155deg, #071710 0%, #0d1f14 60%, #163326 100%)', border: '1px solid rgba(107,143,113,0.18)', borderRadius: '22px', padding: '24px 24px', boxShadow: '0 4px 20px rgba(0,0,0,0.14)' }}>
+                      <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.65)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '2px' }}>Right Now</p>
+                      <p style={{ fontSize: '18px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', marginBottom: '22px' }}>Health Snapshot</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         {[
-                          { label: 'Steps Today', value: '5,240', target: '7,000', pct: 74, color: '#7B68EE', icon: '🚶' },
-                          { label: 'Weight', value: '68.8 kg', target: '−1.2 kg', pct: 60, color: 'var(--color-terracotta)', icon: '⚖️' },
-                          { label: 'HbA1c', value: '5.8%', target: 'Target <5.7', pct: 85, color: 'var(--color-sage)', icon: '🩸' },
-                          { label: 'Blood Pressure', value: '118/76', target: 'Normal', pct: 100, color: '#C49A26', icon: '❤️' },
+                          { label: 'Steps Today', value: '5,240', sub: 'of 7,000 goal', pct: 74, color: '#8B7EF8', dimColor: 'rgba(139,126,248,0.15)', icon: '🚶' },
+                          { label: 'Weight', value: '68.8 kg', sub: '−1.2 kg this month', pct: 60, color: '#E87A6A', dimColor: 'rgba(232,122,106,0.15)', icon: '⚖️' },
+                          { label: 'HbA1c', value: '5.8%', sub: 'Target < 5.7%', pct: 85, color: '#6B8F71', dimColor: 'rgba(107,143,113,0.15)', icon: '🩸' },
+                          { label: 'Blood Pressure', value: '118/76', sub: 'Normal range ✓', pct: 100, color: '#D4A843', dimColor: 'rgba(212,168,67,0.15)', icon: '❤️' },
                         ].map((m, i) => (
-                          <div key={i} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '16px', padding: '14px 14px 12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                              <span style={{ fontSize: '15px', lineHeight: 1 }}>{m.icon}</span>
-                              <p style={{ fontSize: '10px', color: 'var(--color-muted)', fontWeight: 500 }}>{m.target}</p>
-                            </div>
-                            <p style={{ fontSize: '18px', fontWeight: 900, color: m.color, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '4px' }}>{m.value}</p>
-                            <p style={{ fontSize: '10px', color: 'var(--color-muted)', marginBottom: '8px' }}>{m.label}</p>
-                            <div style={{ height: '3px', background: 'var(--color-border)', borderRadius: '2px', overflow: 'hidden' }}>
-                              <motion.div initial={{ width: 0 }} animate={{ width: `${m.pct}%` }} transition={{ duration: 0.9, delay: i * 0.1, ease: 'easeOut' }}
-                                style={{ height: '100%', background: m.color, borderRadius: '2px' }} />
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '14px', background: m.dimColor, borderRadius: '14px', padding: '13px 16px' }}>
+                            <span style={{ fontSize: '22px', lineHeight: 1, flexShrink: 0 }}>{m.icon}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                <p style={{ fontSize: '22px', fontWeight: 900, color: m.color, letterSpacing: '-0.03em', lineHeight: 1 }}>{m.value}</p>
+                                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.42)', fontWeight: 500 }}>{m.label}</p>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ flex: 1, height: '3px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${m.pct}%` }} transition={{ duration: 0.9, delay: i * 0.1, ease: 'easeOut' }}
+                                    style={{ height: '100%', background: m.color, borderRadius: '2px' }} />
+                                </div>
+                                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.42)', flexShrink: 0 }}>{m.sub}</p>
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
-
-                  </div>{/* end journey right */}
-                </div>{/* end journey workspace grid */}
-
-                {/* Personal Patterns — full-width row below the grid (avoids blank gap under JourneyIndicator) */}
-                <div style={{ marginTop: '24px', background: '#fff', border: '1px solid var(--color-border)', borderRadius: '22px', padding: '20px 24px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
-                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '2px' }}>From your data</p>
-                  <p style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-ink)', letterSpacing: '-0.02em', marginBottom: '16px' }}>Your Patterns</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    {[
-                      { icon: '😴', accent: 'var(--color-sage)', bg: 'rgba(107,143,113,0.08)', category: 'Sleep', headline: 'Movement improves your sleep', insight: 'You sleep 45 min longer on days you walk 7,000+ steps.', stat: '+45 min' },
-                      { icon: '🔥', accent: '#7B68EE', bg: 'rgba(123,104,238,0.08)', category: 'Streaks', headline: 'Morning logging protects streaks', insight: 'Your streak has never broken on days you logged before 9am.', stat: '0 breaks' },
-                    ].map((p, i) => (
-                      <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', background: p.bg, borderRadius: '14px', padding: '14px' }}>
-                        <div style={{ fontSize: '22px', lineHeight: 1, flexShrink: 0 }}>{p.icon}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                            <p style={{ fontSize: '10px', fontWeight: 700, color: p.accent, textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>{p.category}</p>
-                            <p style={{ fontSize: '13px', fontWeight: 900, color: p.accent, letterSpacing: '-0.02em' }}>{p.stat}</p>
-                          </div>
-                          <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '3px', lineHeight: 1.3 }}>{p.headline}</p>
-                          <p style={{ fontSize: '11px', color: 'var(--color-muted)', lineHeight: 1.5 }}>{p.insight}</p>
-                        </div>
-                      </div>
-                    ))}
                   </div>
-                </div>
+
+                </div>{/* end journey workspace grid */}
 
               </section>
 
@@ -7483,11 +11603,18 @@ function OverviewContent() {
                 <BiomarkerProgressShowcase />
               </div>
 
-              {/* 4. Today's Focus + Toolkit */}
+              {/* 4. Today's Focus + Complete Today's Journey */}
               <section className="ov-dt-section ov-dt-section-dark">
-                <div style={{ marginBottom: '28px' }}>
-                  <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.70)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: '4px' }}>Your Daily Operations</p>
-                  <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em' }}>Health Command Center</h2>
+                <div style={{ marginBottom: '28px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: '12px' }}>
+                  <div>
+                    <p style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(168,197,172,0.70)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: '4px' }}>Your Daily Operations</p>
+                    <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em' }}>Complete Today&apos;s Journey</h2>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.28)', borderRadius: '20px', padding: '7px 14px' }}>
+                    <Zap size={14} color="#D4A843" fill="#D4A843" />
+                    <span style={{ fontSize: '14px', fontWeight: 800, color: '#D4A843' }}>{hplus.score} H+</span>
+                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>· {hplus.streak}-day streak 🔥</span>
+                  </div>
                 </div>
 
                 {/* Today's Focus — full width cinematic card */}
@@ -7576,51 +11703,57 @@ function OverviewContent() {
 
                 {/* Setup banner */}
                 {showSetup && (
-                  <div style={{ marginBottom: '20px', background: 'rgba(212,168,67,0.06)', border: '1px solid rgba(212,168,67,0.22)', borderRadius: '16px', padding: '16px 22px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-ink)', marginBottom: '3px' }}>One last thing to unlock your full journey</p>
-                      <p style={{ fontSize: '12px', color: 'var(--color-muted)', lineHeight: 1.5 }}>Upload your baseline labs so Dr. Ananya can personalise your insights</p>
+                  <div style={{
+                    marginBottom: '20px', borderRadius: '18px', padding: '18px 24px',
+                    display: 'flex', alignItems: 'center', gap: '20px',
+                    background: 'linear-gradient(135deg, rgba(212,168,67,0.14) 0%, rgba(176,120,40,0.10) 60%, rgba(212,168,67,0.07) 100%)',
+                    border: '1px solid rgba(212,168,67,0.32)',
+                    boxShadow: '0 2px 16px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.05)',
+                    position: 'relative', overflow: 'hidden',
+                  }}>
+                    {/* Subtle radial highlight behind text */}
+                    <div style={{ position: 'absolute', left: '-20px', top: '-20px', width: '200px', height: '120px', background: 'radial-gradient(ellipse, rgba(212,168,67,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
+                    <span style={{ fontSize: '22px', lineHeight: 1, flexShrink: 0, position: 'relative' }}>🧪</span>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                      <p style={{ fontSize: '15px', fontWeight: 800, color: '#F8FAF8', letterSpacing: '-0.01em', marginBottom: '3px' }}>
+                        One last thing to unlock your full journey
+                      </p>
+                      <p style={{ fontSize: '12px', color: 'rgba(196,218,200,0.80)', lineHeight: 1.55 }}>
+                        Upload your baseline labs so Dr. Ananya can personalise your insights and recommendations.
+                      </p>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0, alignItems: 'center' }}>
-                      <button style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '9px 18px', background: 'var(--color-ink)', color: '#fff', border: 'none', borderRadius: '20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
-                        <Plus size={12} /> Upload labs
+                    <div style={{ display: 'flex', gap: '10px', flexShrink: 0, alignItems: 'center', position: 'relative' }}>
+                      <button style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                        padding: '10px 20px',
+                        background: 'linear-gradient(135deg, #D4A843 0%, #B07828 100%)',
+                        color: '#fff', border: 'none', borderRadius: '22px',
+                        fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                        boxShadow: '0 3px 12px rgba(212,168,67,0.36), 0 1px 0 rgba(255,255,255,0.12) inset',
+                        letterSpacing: '-0.01em',
+                        transition: 'transform 0.16s ease, box-shadow 0.16s ease',
+                      }}
+                        onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.transform = 'translateY(-1px)'; b.style.boxShadow = '0 5px 18px rgba(212,168,67,0.48), 0 1px 0 rgba(255,255,255,0.12) inset'; }}
+                        onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.transform = ''; b.style.boxShadow = '0 3px 12px rgba(212,168,67,0.36), 0 1px 0 rgba(255,255,255,0.12) inset'; }}
+                      >
+                        <Plus size={13} strokeWidth={2.5} /> Upload Labs
                       </button>
-                      <button onClick={() => setShowSetup(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--color-muted)', fontSize: '18px', lineHeight: 1 }}>×</button>
+                      <button onClick={() => setShowSetup(false)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', color: 'rgba(255,255,255,0.55)', fontSize: '15px', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s ease' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.14)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)'; }}>
+                        ×
+                      </button>
                     </div>
                   </div>
                 )}
 
-                {/* Toolkit — full width 6-col */}
-                <div style={{ marginBottom: '14px' }}>
-                  <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(168,197,172,0.60)', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>Your Tools</p>
-                </div>
-                <div className="ov-dt-cmd-toolkit-full">
-                  {[
-                    { imgSrc: 'https://images.unsplash.com/photo-1505576399279-565b52d4ac71?w=600&q=80', icon: CheckCircle2, title: 'Habit Tracker', tag: 'Daily' },
-                    { imgSrc: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&q=80', icon: UtensilsCrossed, title: 'Meal Logger', tag: 'Nutrition' },
-                    { imgSrc: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=600&q=80', icon: Footprints, title: 'Steps & Activity', tag: 'Movement' },
-                    { imgSrc: 'https://images.unsplash.com/photo-1541480601022-2308c0f02487?w=600&q=80', icon: Moon, title: 'Sleep Tracker', tag: 'Recovery' },
-                    { imgSrc: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&q=80', icon: Brain, title: 'Mindfulness', tag: 'Mental' },
-                    { imgSrc: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=600&q=80', icon: FlaskConical, title: 'Progress & Labs', tag: 'Biomarkers' },
-                  ].map((card, i) => (
-                    <motion.div key={i} whileHover={{ y: -4, boxShadow: '0 14px 40px rgba(0,0,0,0.40)' }}
-                      style={{ borderRadius: '18px', overflow: 'hidden', cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', boxShadow: '0 2px 12px rgba(0,0,0,0.20)' }}>
-                      <div style={{ height: '120px', position: 'relative', overflow: 'hidden' }}>
-                        <img src={card.imgSrc} alt={card.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.4s ease' }} />
-                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 20%, rgba(0,0,0,0.60) 100%)' }} />
-                        <div style={{ position: 'absolute', top: '10px', left: '10px', background: 'rgba(0,0,0,0.40)', backdropFilter: 'blur(6px)', borderRadius: '8px', padding: '3px 8px' }}>
-                          <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>{card.tag}</span>
-                        </div>
-                        <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <card.icon size={14} color="#fff" strokeWidth={2} />
-                        </div>
-                      </div>
-                      <div style={{ padding: '13px 14px' }}>
-                        <p style={{ fontSize: '13px', fontWeight: 700, color: 'rgba(255,255,255,0.88)', letterSpacing: '-0.01em', lineHeight: 1.3 }}>{card.title}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                {/* ── Earn Today's H+ carousel ── */}
+                <EarnTodayCarousel
+                  categoryProgress={categoryProgress}
+                  hplus={hplus}
+                  onOpen={s => setSheet(s)}
+                  loggedToday={loggedToday}
+                />
               </section>
 
               {/* 6+7. Learn & Discover */}
@@ -7642,11 +11775,11 @@ function OverviewContent() {
                   return (
                     <a href="/community" style={{ display: 'block', textDecoration: 'none', marginBottom: '32px' }}>
                       <div style={{
-                        borderRadius: '28px', overflow: 'hidden',
+                        borderRadius: '24px', overflow: 'hidden',
                         boxShadow: '0 8px 40px rgba(0,0,0,0.14)',
                         background: '#111',
                         display: 'grid', gridTemplateColumns: '1fr 1fr',
-                        minHeight: '380px',
+                        minHeight: '260px',
                         transition: 'box-shadow 0.22s ease, transform 0.22s ease',
                       }}
                       onMouseEnter={e => { const d = e.currentTarget as HTMLDivElement; d.style.boxShadow = '0 16px 56px rgba(0,0,0,0.22)'; d.style.transform = 'translateY(-3px)'; }}
@@ -7654,38 +11787,38 @@ function OverviewContent() {
                       >
                         {/* Left: photo */}
                         <div style={{ position: 'relative', overflow: 'hidden' }}>
-                          <img src={featured.img} alt={featured.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.6s ease' }}
+                          <img src={featured.img} alt={featured.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block', transition: 'transform 0.6s ease' }}
                             onMouseEnter={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.04)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)'; }}
                           />
                           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, transparent 60%, rgba(0,0,0,0.60) 100%)' }} />
-                          <div style={{ position: 'absolute', top: '20px', left: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ position: 'absolute', top: '16px', left: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ fontSize: '10px', fontWeight: 700, color: '#fff', background: 'rgba(22,163,74,0.90)', borderRadius: '20px', padding: '4px 12px' }}>{featured.badge}</span>
                             <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.80)', background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', borderRadius: '20px', padding: '4px 12px' }}>Featured Story</span>
                           </div>
                         </div>
                         {/* Right: story content */}
-                        <div style={{ background: 'linear-gradient(150deg, #1a1a1a 0%, #111 100%)', padding: '44px 44px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div style={{ background: 'linear-gradient(150deg, #1a1a1a 0%, #111 100%)', padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
                           <div>
-                            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '8px' }}>{featured.location}</p>
-                            <p style={{ fontSize: '28px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.15, marginBottom: '24px' }}>{featured.headline}</p>
-                            <div style={{ borderLeft: '3px solid var(--color-sage)', paddingLeft: '18px', marginBottom: '32px' }}>
-                              <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.72)', lineHeight: 1.70, fontStyle: 'italic' }}>
-                                &ldquo;{featured.quote}&rdquo;
-                              </p>
-                              <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-sage)', marginTop: '12px' }}>— {featured.name}</p>
-                            </div>
+                            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-sage)', textTransform: 'uppercase' as const, letterSpacing: '0.10em', marginBottom: '6px' }}>{featured.location}</p>
+                            <p style={{ fontSize: '22px', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.18 }}>{featured.headline}</p>
+                          </div>
+                          <div style={{ borderLeft: '3px solid var(--color-sage)', paddingLeft: '14px' }}>
+                            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.68)', lineHeight: 1.58, fontStyle: 'italic' }}>
+                              &ldquo;{featured.quote}&rdquo;
+                            </p>
+                            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-sage)', marginTop: '8px' }}>— {featured.name}</p>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                            {featured.stats.map((s, i) => (
+                              <div key={i} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '12px', padding: '10px 8px', textAlign: 'center' as const }}>
+                                <p style={{ fontSize: '17px', fontWeight: 900, color: 'var(--color-sage)', letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '4px' }}>{s.label}</p>
+                                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.42)', lineHeight: 1.3 }}>{s.sub}</p>
+                              </div>
+                            ))}
                           </div>
                           <div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '28px' }}>
-                              {featured.stats.map((s, i) => (
-                                <div key={i} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '14px', padding: '14px 10px', textAlign: 'center' as const }}>
-                                  <p style={{ fontSize: '20px', fontWeight: 900, color: 'var(--color-sage)', letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '5px' }}>{s.label}</p>
-                                  <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.42)', lineHeight: 1.3 }}>{s.sub}</p>
-                                </div>
-                              ))}
-                            </div>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(107,143,113,0.20)', border: '1px solid rgba(107,143,113,0.30)', borderRadius: '14px', padding: '11px 20px' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(107,143,113,0.20)', border: '1px solid rgba(107,143,113,0.30)', borderRadius: '12px', padding: '9px 18px' }}>
                               <span style={{ fontSize: '13px', fontWeight: 700, color: '#A8C5AC' }}>Read full story</span>
                               <ArrowRight size={14} color="#A8C5AC" />
                             </div>
@@ -8007,27 +12140,27 @@ function OverviewContent() {
                         {/* CTAs */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                           <a
-                            href="/journey"
+                            href="/daily-plan"
                             style={{
                               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                               padding: '18px 22px',
-                              background: 'linear-gradient(135deg, rgba(107,143,113,0.28) 0%, rgba(74,110,80,0.22) 100%)',
-                              border: '1px solid rgba(107,143,113,0.38)',
+                              background: 'linear-gradient(135deg, rgba(107,143,113,0.32) 0%, rgba(74,110,80,0.26) 100%)',
+                              border: '1px solid rgba(107,143,113,0.42)',
                               borderRadius: '18px', textDecoration: 'none', color: '#fff',
                               transition: 'background 0.18s ease, box-shadow 0.18s ease',
-                              boxShadow: '0 4px 20px rgba(28,43,30,0.20)',
+                              boxShadow: '0 4px 20px rgba(13,32,24,0.22)',
                             }}
-                            onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.background = 'linear-gradient(135deg, rgba(107,143,113,0.40) 0%, rgba(74,110,80,0.32) 100%)'; a.style.boxShadow = '0 8px 32px rgba(28,43,30,0.36)'; }}
-                            onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.background = 'linear-gradient(135deg, rgba(107,143,113,0.28) 0%, rgba(74,110,80,0.22) 100%)'; a.style.boxShadow = '0 4px 20px rgba(28,43,30,0.20)'; }}
+                            onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.background = 'linear-gradient(135deg, rgba(107,143,113,0.46) 0%, rgba(74,110,80,0.38) 100%)'; }}
+                            onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.background = 'linear-gradient(135deg, rgba(107,143,113,0.32) 0%, rgba(74,110,80,0.26) 100%)'; }}
                           >
                             <div>
-                              <p style={{ fontSize: '14px', fontWeight: 800, color: '#fff', marginBottom: '2px' }}>View My Complete Journey</p>
-                              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>Photos · Milestones · Achievements</p>
+                              <p style={{ fontSize: '14px', fontWeight: 800, color: '#fff', marginBottom: '2px' }}>Today&apos;s Meal &amp; Exercise Plan</p>
+                              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.48)' }}>Meals · Movement · Recovery</p>
                             </div>
-                            <ArrowRight size={18} color="rgba(168,197,172,0.80)" />
+                            <ArrowRight size={18} color="rgba(168,197,172,0.85)" />
                           </a>
                           <a
-                            href="/progress"
+                            href="/journey"
                             style={{
                               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                               padding: '15px 22px',
@@ -8039,8 +12172,27 @@ function OverviewContent() {
                             onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.10)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.06)'; }}
                           >
-                            <span style={{ fontSize: '13px', fontWeight: 700 }}>View Biomarker Progress</span>
+                            <div>
+                              <p style={{ fontSize: '13px', fontWeight: 700, marginBottom: '1px' }}>View My Complete Journey</p>
+                              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)' }}>Photos · Milestones · Achievements</p>
+                            </div>
                             <ArrowRight size={16} color="rgba(255,255,255,0.38)" />
+                          </a>
+                          <a
+                            href="/progress"
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              padding: '15px 22px',
+                              background: 'rgba(255,255,255,0.04)',
+                              border: '1px solid rgba(255,255,255,0.08)',
+                              borderRadius: '18px', textDecoration: 'none', color: 'rgba(255,255,255,0.55)',
+                              transition: 'background 0.15s ease',
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.08)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.04)'; }}
+                          >
+                            <span style={{ fontSize: '13px', fontWeight: 700 }}>View Biomarker Progress</span>
+                            <ArrowRight size={16} color="rgba(255,255,255,0.30)" />
                           </a>
                         </div>
                       </div>
@@ -8087,18 +12239,24 @@ function OverviewContent() {
 // ---- Inner page (needs Suspense for useSearchParams) ----
 
 // ---- Inner page (needs Suspense for useSearchParams) ----
+type OverviewState = 'pre_started' | 'active';
+
 function TodayPageInner() {
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get('tab') as TabId) || 'overview';
+  const initialOverviewState = (searchParams.get('state') === 'pre_started' ? 'pre_started' : 'active') as OverviewState;
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+  const [overviewState, setOverviewState] = useState<OverviewState>(initialOverviewState);
   useEffect(() => {
     const t = searchParams.get('tab') as TabId;
     if (t) setActiveTab(t);
+    const s = searchParams.get('state');
+    if (s === 'pre_started') setOverviewState('pre_started');
   }, [searchParams]);
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'overview': return <OverviewContent />;
+      case 'overview': return <OverviewContent overviewState={overviewState} setOverviewState={setOverviewState} />;
       case 'month1': return <Month1Content />;
       case 'month2': return <Month2Content />;
       case 'month3': return <LockedMonthContent monthNum={3} />;
@@ -8139,11 +12297,12 @@ function TodayPageInner() {
                 padding: '13px 14px',
                 background: 'transparent',
                 border: 'none',
-                borderBottom: isActive ? '2px solid var(--color-sage)' : '2px solid transparent',
+                borderBottom: isActive ? '2.5px solid var(--color-sage)' : '2.5px solid transparent',
                 marginBottom: '-1px',
                 fontSize: '13px',
-                fontWeight: isActive ? 700 : 400,
+                fontWeight: isActive ? 800 : 400,
                 color: isActive ? 'var(--color-sage)' : 'var(--color-muted)',
+                letterSpacing: isActive ? '-0.01em' : 'normal',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 transition: 'color 0.15s ease',
@@ -8151,13 +12310,21 @@ function TodayPageInner() {
             >
               {tab.label}
               {tab.status === 'completed' && (
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16A34A', flexShrink: 0 }} />
+                <LockOpen size={11} color="rgba(107,143,113,0.45)" strokeWidth={2} style={{ flexShrink: 0 }} />
               )}
               {tab.status === 'active' && (
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--color-gold)', flexShrink: 0 }} />
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: '22px', height: '22px', borderRadius: '50%',
+                  background: 'var(--color-sage)',
+                  boxShadow: '0 2px 8px rgba(107,143,113,0.40)',
+                  flexShrink: 0,
+                }}>
+                  <LockOpen size={12} color="#fff" strokeWidth={2.5} />
+                </span>
               )}
               {tab.status === 'locked' && (
-                <Lock size={9} color="var(--color-muted)" />
+                <Lock size={9} color="rgba(107,143,113,0.30)" strokeWidth={1.8} />
               )}
             </button>
           );

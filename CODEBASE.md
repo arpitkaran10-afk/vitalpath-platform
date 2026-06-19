@@ -1,4 +1,5 @@
 # VitalPath — Complete Codebase Reference
+> Version 2.6 — Updated 2026-06-19
 
 > Feed this file to any AI assistant (ChatGPT, Claude, Gemini, etc.) to give it full context about the VitalPath project before asking questions or requesting code changes.
 
@@ -194,12 +195,17 @@ apps/web/
 │   ├── layout.tsx                 ← Root layout (fonts, metadata)
 │   ├── globals.css                ← CSS variables + Tailwind + dt-* desktop utilities
 │   ├── page.tsx                   ← Root redirect → /today
+│   ├── onboarding/page.tsx        ← Post-signup onboarding flow (5 screens, outside app shell)
 │   └── (app)/                     ← App route group
-│       ├── layout.tsx             ← App shell (header, FAB — no sidebar)
-│       ├── today/page.tsx         ← Main dashboard (7300+ lines, intentionally monolithic)
+│       ├── layout.tsx             ← App shell (header, FAB, HPlusPill — no sidebar)
+│       ├── today/page.tsx         ← Main dashboard (8500+ lines, intentionally monolithic)
+│       ├── hplus/page.tsx         ← H+ Points experience (score, timeline, analytics, achievements)
+│       ├── overview/page.tsx      ← Programme overview / onboarding landing page (900 lines)
 │       ├── progress/page.tsx      ← Biomarker tracking + charts
 │       ├── community/page.tsx     ← Member success stories
 │       ├── journey/page.tsx       ← Transformation documentary page (secondary)
+│       ├── daily-plan/page.tsx    ← Personalised Daily Meal & Exercise Plan (secondary)
+│       ├── nudges/page.tsx        ← Nudge Library — browse & activate habit reminders
 │       ├── habits/page.tsx        ← Redirects → /today
 │       ├── meals/page.tsx         ← Redirects → /today
 │       ├── steps/page.tsx         ← Redirects → /today
@@ -208,7 +214,13 @@ apps/web/
 │           ├── HabitCheckbox.tsx
 │           ├── BottomNav.tsx      ← exists but not rendered (bottom nav removed)
 │           ├── CircularProgress.tsx
-│           └── PhaseCard.tsx
+│           ├── PhaseCard.tsx
+│           └── NutritionBlueprintWizard.tsx  ← 5-step meal plan onboarding wizard
+├── lib/
+│   ├── nudges-normalized.json     ← 388 structured nudges imported by nudges/page.tsx
+│   ├── hplus-types.ts             ← H+ engine config, HPLUS_CONFIG, all H+ TypeScript interfaces
+│   ├── hplus-demo-data.ts         ← H+ static demo data functions (Phase 2: replace with API)
+│   └── hplus-store.ts             ← H+ shared in-memory store (singleton, useHPlusStore hook)
 ```
 
 ### Design Tokens (`globals.css`)
@@ -233,7 +245,7 @@ apps/web/
 
 ### App Shell Layout (`(app)/layout.tsx`)
 
-- **Fixed top header** (56px): VitalPath brand, "Complete Profile (2/3)" badge, message + settings buttons
+- **Fixed top header** (56px): VitalPath brand left; right side: "Complete Profile (2/3)" badge → **H+ Score Pill** → Messages icon → Settings icon
 - **Right sidebar** — **REMOVED**. Desktop is full-width at all breakpoints. No sidebar in the app shell.
 - ~~Mobile bottom nav~~ — **removed**. Navigation to Progress and Community is contextual via carousel nav cards in the Overview page.
 - **`HealthConciergeModal`** — Global floating action button + premium modal. FAB: fixed bottom-right (`24px` from edges), `z-index: 300`, sage green 60px circle with `Sparkles` icon and "Continue Your Journey" tooltip. Backdrop: `z-index: 400`, radial vignette on desktop. Modal: `z-index: 401`. Backdrop tap dismisses. No toggle-on-FAB.
@@ -259,11 +271,11 @@ apps/web/
 
 **Desktop left column:** Transformation Story Hero (360px fixed height, cinematic dark gradient, stat pills, "Continue Story" CTA) → Goals + Progress Hub (2-col `1fr 1fr` row, each 220px) → Health Briefing (natural height, dark gold treatment)
 
-**Desktop right column:** Ask Me Anything (240px, aurora dark card, strong AI presence) → Meal Planning (220px, gold warm gradient) → Support (220px, dark coaching/AI variant)
+**Desktop right column:** Ask Me Anything (240px, aurora dark card, strong AI presence) → Daily Nudges (~230px natural height, aurora dark card, `#0a0a1a → #0a0f0a`) → Meal Planning (220px, gold warm gradient) → Support (220px, dark coaching/AI variant)
 
-**Desktop card heights:** Story 360px · Ask 240px · Goals 220px · Meal 220px · Support 220px · Progress Hub 220px (two 110px inner cards)
+**Desktop card heights:** Story 360px · Ask 240px · Nudges ~230px (natural/auto height) · Goals 220px · Meal 220px · Support 220px · Progress Hub 220px (two 110px inner cards)
 
-**All 7 sections — content and routes:**
+**All 8 sections — content and routes:**
 | # | Section | Desktop style | Route |
 |---|---|---|---|
 | 1 | YOUR TRANSFORMATION STORY | Dark forest cinematic (left col, hero) — `#1f3526 → #0d1f14` gradients, stat pills, white CTA | `/journey` |
@@ -271,10 +283,15 @@ apps/web/
 | 3 | PROGRESS HUB | Dark forest card (left col, 2-col row) — `#0d1a10 → #162112`, header "Track Your Progress", 2 inner cards: Upload Progress Selfie (brown gradient, Camera) + Log Biomarkers (navy gradient, Activity) | `/progress/selfie`, `/progress/biomarkers` |
 | 4 | YOUR PERSONAL HEALTH BRIEFING | Dark forest card (left col, full width) — `#1e2e1f → #162318`, gold Mail icon, "Subscribe" + "View Previous Editions" CTAs | `/briefing/subscribe`, `/briefing` |
 | 5 | ASK ME ANYTHING | Aurora dark card (right col top) — `#090f08 → #0c0910`, green/purple aurora glows, Sparkles icon | `/ask` |
-| 6 | PERSONALISED MEAL PLAN | Gold warm card (right col mid) — `#FBF6EE → #F6EDD9`, Utensils icon — conditional: "Consult My Coach" if `HAS_COACHING`, else "Create My Plan" | conditional |
-| 7 | SUPPORT | Dark coaching card (right col bottom) — sage gradient if `HAS_COACHING`, purple if not; Message/Bot icon — conditional CTA | conditional |
+| 6 | YOUR DAILY NUDGES | Aurora dark card (right col) — `#0a0a1a → #0a0f0a`, Bell icon, sage glow top-right + indigo glow bottom-left; conditional copy: "3 nudges synced with Dr. Ananya" (`HAS_COACHING=true`) / "Set up your nudge schedule". CTA: "Configure Nudges" — **left-aligned**, inside the content column (not floated right). Card height is `auto` (no fixed height, `overflow` not clipped). | `/nudges` |
+| 7 | PERSONALISED MEAL PLAN | Gold warm card (right col) — `#FBF6EE → #F6EDD9`, Utensils icon — conditional: "Consult My Coach" if `HAS_COACHING`, else "Create My Plan" | conditional |
+| 8 | SUPPORT | Dark coaching card (right col bottom) — sage gradient if `HAS_COACHING`, purple if not; Message/Bot icon — conditional CTA | conditional |
 
-**Icon imports in layout.tsx:** `Settings`, `MessageCircle`, `Sparkles`, `X`, `Target`, `Camera`, `Activity`, `Bot`, `Utensils`, `BookOpen`, `ArrowRight`, `Mail`
+**H+ Score Pill (`HPlusPill`)** — lives in `(app)/layout.tsx`, rendered between "Complete Profile" and Messages. **Light surface pill** — `background: linear-gradient(135deg, rgba(107,143,113,0.10), rgba(212,168,67,0.10))`, sage green border `rgba(107,143,113,0.28)`. Contains: 22px circular badge (sage→gold gradient, `Zap` icon white filled, subtle sage box-shadow), live score from `useHPlusStore()` in warm amber-brown `#8A6B1A`. No animated glow. Renders via **`<Link href="/hplus">`** (Next.js client-side navigation — preserves the H+ store singleton). `Zap` imported from lucide-react.
+
+**Icon imports in layout.tsx:** `Settings`, `MessageCircle`, `Sparkles`, `X`, `Target`, `Camera`, `Activity`, `Bot`, `Utensils`, `BookOpen`, `ArrowRight`, `Mail`, `Bell`, `Zap`
+
+**Icon imports in today/page.tsx (lucide-react):** `Lock`, `LockOpen`, `CheckCircle2`, `ChevronLeft`, `ChevronRight`, `Plus`, `Heart`, `Bookmark`, `BarChart3`, `Moon`, `UtensilsCrossed`, `Footprints`, `Brain`, `FlaskConical`, `Bell`, `Target`, `TrendingUp`, `Zap`, `Share2`, `Download`, `Link2`, `Camera`, `Star`, `Sparkles`, `ArrowRight`, `BookOpen`, `Droplets`, `Scale`, `Dumbbell`, `Activity`
 
 **Main content padding-bottom:** `40px`. No sidebar at any breakpoint.
 
@@ -292,10 +309,10 @@ type TabId = 'overview' | 'month1' | 'month2' | 'month3' | 'month4' | 'month5' |
 
 | Tab | Status | Content |
 |---|---|---|
-| Overview | — | Main dashboard |
-| Month 1 | completed (green dot) | Demo toggle: Active state OR Completed state |
-| Month 2 | active (gold dot) | In-progress month screen |
-| Month 3–6 | locked (lock icon) | Full future-month preview experiences |
+| Overview | — | Main dashboard — supports `pre_started` and `active` states |
+| Month 1 | completed (`LockOpen` icon, muted grey `var(--color-muted)`) | Demo toggle: Active state OR Completed state |
+| Month 2 | active (`LockOpen` icon, sage green `var(--color-sage)`) | In-progress month screen |
+| Month 3–6 | locked (`Lock` icon, muted grey) | Full future-month preview experiences |
 
 Tab is set via `?tab=month2` query param. Active tab underline uses sage green.
 
@@ -303,10 +320,60 @@ Tab is set via `?tab=month2` query param. Active tab underline uses sage green.
 - Sticky at `top: 56px`, `z-index: 99`
 - Backdrop blur `rgba(250,250,248,0.95)`
 - Active: `border-bottom: 2px solid var(--color-sage)`, `color: var(--color-sage)`
+- Status icons: `LockOpen size={12} strokeWidth={2}` for completed (muted) and active (sage); `Lock size={9}` for locked months. Icon sits inline after label text at `gap: 5px`, vertically centred via `alignItems: center` on the button.
+
+### Overview State System
+
+```typescript
+type OverviewState = 'pre_started' | 'active';
+```
+
+`TodayPageInner` reads `?state=pre_started` from `searchParams` and passes it as `overviewState` + `setOverviewState` props to `OverviewContent`. Default is `'active'`.
+
+**Demo toggle:** A fixed segmented control (top-right, `z-index: 200`, dark forest pill) renders when `setOverviewState` is provided. Labels: `PRE-STARTED` / `ACTIVE`. Clicking switches state in-place without navigation.
+
+**Pre-started vs Active — what changes per section:**
+
+| Section | Active | Pre-Started |
+|---|---|---|
+| Hero context pill | Day 14 of 30 · Build Healthy Habits | Personalised for you · 6-Month Programme |
+| Hero headline (mobile) | Good morning/afternoon/evening, Priya | Your health transformation starts today. |
+| Hero headline (desktop) | Good morning/afternoon/evening, Priya | Your health / transformation / starts today. (gradient) |
+| Hero subtext | Day-of-week motivational copy | 6-month programme description |
+| Hero stats | 47% progress bar + Day 14 of 30 | 6 Months · 180 Days · Dr. Ananya stat tiles |
+| Desktop chapter pill | Chapter 2 · Build Healthy Habits | Enrolled · Ready to begin your transformation |
+| Desktop hero CTA | Continue Journey → Month 2 | Start Month 1 (sage green) + Explore My Journey (ghost) |
+| Mobile CTAs (below hero) | — (not shown) | Start Month 1 + Explore Journey button strip |
+| Today's Focus card | Active focus task + progress bar | What Day 1 Looks Like — 4 welcoming checklist items |
+| Health Overview heading | Your performance today / Health Overview | What we track together / Health Pillars |
+| Personal Patterns heading | Discovered from your data / Your personal patterns | What we help you discover / Your Health Patterns |
+| Daily Journey section heading | Month 2 · Build Healthy Habits / Complete Today's Journey | Preview / Your Daily Coaching Experience |
+| Daily Journey subtext | 847 members logged actions today | Preview framing copy |
+| Success Stories heading | People like you / Member Success Stories | They started exactly where you are / People Who Made It |
+| Success Stories intro | — | "People who started exactly where you are today" paragraph |
+| Coach message heading | Message from your coach | A welcome from your coach |
+| Coach message status | Available now | Ready to begin |
+| Coach message body | Active coaching nudge about logging | Welcome message from Dr. Ananya |
+| Coach message CTA | Reply to Dr. Ananya → /coach/message | Start Month 1 → /today?tab=month1 |
+| Footer card | Journey stats + 3 nav links | "You're ready to begin." conversion card + Start Month 1 CTA |
+| Journey section heading (desktop) | Your Transformation Roadmap / Your Journey Experience | Your Transformation Blueprint / Your 6-Month Journey |
+| Journey indicator default phase | 2 | 1 |
+| Patterns section heading (desktop) | From your data / Your Patterns | What we help you discover / Your Health Patterns |
+| Stories section heading (desktop) | People like you / Member Success Stories | They started exactly where you are / People Who Made It |
+
+**All active functionality is untouched.** `isPreStarted = overviewState === 'pre_started'` is a read-only flag; every active code path is preserved in the `else` branch.
 
 ---
 
 ### Overview Tab (`OverviewContent`)
+
+**Props:**
+```typescript
+function OverviewContent({ overviewState = 'active', setOverviewState }: {
+  overviewState?: OverviewState;
+  setOverviewState?: (s: OverviewState) => void;
+})
+```
 
 **State:**
 ```typescript
@@ -339,7 +406,7 @@ const [habitsChecked, setHabitsChecked] = useState([false, false, false, false, 
 
 7. **Personal Patterns** — Two full-width white cards with icon chip (sage/gold), category label, bold inline text pattern.
 
-8. **Health Programme** — Eyebrow "MONTH 2 · BUILD HEALTHY HABITS", habits checklist card + 2×3 grid of `WorkflowCard` components.
+8. **Complete Today's Journey** — Eyebrow "MONTH 2 · BUILD HEALTHY HABITS", section renamed from "Your Health Programme". Habits checklist card on the left. Right side replaced with the **`EarnTodayCarousel`** (horizontal swipe, 9 cinematic cards). H+ score pill replaces old "Log activity" button in the section header.
 
 9. **Explore Health Topics** — 5 filter pills, 3 question rows with chevrons.
 
@@ -417,8 +484,9 @@ Props: `title, badge, badgeType, description, bars, barColor, mainValue, compari
 
 Layout order (top → bottom): label + badge → **28px bold value** → comparison → chart (40px) → coach guidance (italic, separated by hairline).
 
-#### `WorkflowCard({ imgSrc, icon, title, description })`
+#### `WorkflowCard({ imgSrc, icon, title, description, badge? })`
 - 16px radius, 100px image with dark gradient overlay
+- Optional `badge` prop: renders a small white pill top-left of the image (10px/700, `rgba(255,255,255,0.92)` bg, 20px radius) — used by Daily Nudges card ("Reminders")
 - Hover: `translateY(-2px)`, elevated shadow
 - Icon + title row, 11px description
 
@@ -436,26 +504,53 @@ Contains a **demo toggle** ("Active" / "Completed") at the top using `useState<'
 
 #### `Month1ActiveContent` — In-progress experience
 
-**Mobile sections (7):** Hero (300px), Health Journey timeline, **My Transformation Story** (`MonthTransformationStory monthNum={1}`), What We've Learned 2×2 insights, Your Starting Point baseline grid, Mission cards, Month 2 Preview image.
+**State:** `discoveryDone: boolean[]` (8 items, one per mission). `handleDiscoveryToggle(i)` toggles completion for unlocked missions.
 
-**Desktop sections (5) — `m1-dt-*` classes:**
+**Mobile sections (6, top to bottom):**
+1. Hero (300px) — "Know Your Health" h2, Day 12/30, progress bar, "Continue Journey" CTA
+2. Health Journey timeline — 5-node vertical milestone path with spine line
+3. **Your Month 1 Discovery Journey** — `DiscoveryJourneySection` (horizontal scroll carousel of 8 mission cards, "Your Health Story" progress widget)
+4. **My Transformation Story** — `MonthTransformationStory monthNum={1}`
+5. **DailyOperationsSection monthNum={1}** / **BiomarkerProgressShowcase**
+6. **Insights You've Unlocked** — dynamic insight cards driven by `discoveryDone`; empty state when none completed. Followed by Your Starting Point baseline grid and Month 2 Preview.
+
+**Desktop sections — `m1-dt-*` classes:**
 
 1. **Discovery Hero Workspace** (`m1-dt-hero-workspace`, 65/35 grid, 600px min-height):
-   - LEFT 65% (`m1-dt-hero-left`): Cinematic full-bleed hero, animated progress bar (Framer Motion width animation), 60px/900 "Know Your Health" title, "Continue Journey →" CTA.
-   - RIGHT 35% (`m1-dt-hero-right`): Dark forest panel (`#071209 → #0f2014`), full Health Journey timeline in dark style — Done nodes show sage ✓, Active has white ring + "NOW" badge, Upcoming is faint. Animated background glow.
+   - LEFT 65%: Cinematic full-bleed hero, 60px/900 "Know Your Health" title, animated progress bar, "Continue Journey →" CTA.
+   - RIGHT 35%: Dark forest panel (`#071209 → #0f2014`), Health Journey timeline in dark style.
 
-2. **My Transformation Story** — `MonthTransformationStory monthNum={1}` inserted between the hero workspace and the sage band. Full-width, full-colour, no wrapper constraints. Consistent with Month 2 and Months 3–6 placement.
+2. **Your Month 1 Discovery Journey** (`DiscoveryJourneySectionDesktop`) — white band. Header: "Your Month 1 Discovery Journey" (44px/900) + "Your Health Story" progress widget (right, 280px). Below: `m1-dt-dj-carousel` horizontal scroll — 8 cinematic cards (`m1-dt-dj-card`, 320px → 360px at 1400px+). Each card shows insight preview before completion, unlocked insight rows after. Blueprint card (Mission 8) locked until missions 1–7 complete.
 
-3. **Understanding You Workspace** (`m1-dt-discovery-workspace`, 50/50 grid, sage-tinted `#EEF3EF` band):
-   - LEFT 50%: "What We've Learned About You" — 2×2 insight cards at 24px padding with larger emoji.
-   - RIGHT 50%: "Your Starting Point" — white card with 32px metric values in a 2×2 internal grid.
+3. **My Transformation Story** — `MonthTransformationStory monthNum={1}`, full-width full-colour.
 
-4. **Your Month 1 Mission** (white band, 5-column grid):
-   - Each mission item is a vertical card with 64px icon tile, label, and task count. Interactive tap-to-complete preserved.
+4. **DailyOperationsSection monthNum={1}** / **BiomarkerProgressShowcase**
 
-5. **Month 2 Preview** (cinematic full-bleed image banner, 480px min-height):
-   - Left: 56px editorial "Month 2 / Build Healthy Habits" title with theme pills.
-   - Right: Frosted glass "Complete Month 1 first" progress card showing Day 12/30 and 60% to unlock.
+5. **Insights You've Unlocked** (`m1-dt-section m1-dt-section-sage`, `#EEF3EF`):
+   - Header: "Insights You've Unlocked" eyebrow + "Your health story, as it unfolds." (40px/900) + 3 baseline stat chips (Weight / Blood Sugar / Blood Pressure).
+   - Empty state: centred dashed card with 🔍 prompt.
+   - Populated: `m1-dt-insights-grid` (4-col, `align-items: start`) — `m1-dt-insight-featured` (spans 2 cols, 36px padding, "Biggest Opportunity" label, first unlocked insight enlarged) + `m1-dt-insight-card` for remaining insights (type badge top-right, 24px padding).
+
+6. **Your Starting Point** (white band, 50/50 `m1-dt-discovery-workspace`) — What We've Learned 2×2 + baseline metrics 2×2.
+
+7. **Month 2 Preview** (cinematic full-bleed image banner, 480px min-height).
+
+**Discovery data constants** (module-level, before `Month1ActiveContent`):
+
+- `DISCOVERY_MISSIONS` — 8 objects. Each: `id`, `title`, `description`, `cta`, `insightPreview`, `time`, `img`, `gradient`, `accent`, `accentBg`, `locked` (only id=7), `insights: DiscoveryInsight[]`.
+- `DiscoveryInsight` type: `{ icon, label, text, type ('Opportunity'|'Priority'|'Goal'|'Habit Pattern'|'Strength'|'Blueprint'), color, bg, border }`.
+- `unlockedInsights` — computed inline: `DISCOVERY_MISSIONS.flatMap((m, i) => discoveryDone[i] ? m.insights.map(ins => ({...ins, missionTitle: m.title})) : [])`.
+
+**`m1-dt-*` CSS class additions:**
+| Class | Purpose |
+|---|---|
+| `m1-dt-discovery-journey` | White band wrapper for `DiscoveryJourneySectionDesktop` |
+| `m1-dt-dj-inner` | `max-width: 1600px; padding: 80px 80px 72px` (96px at 1400px+) |
+| `m1-dt-dj-carousel` | Horizontal scroll, `scroll-snap-type: x mandatory`, thin scrollbar |
+| `m1-dt-dj-card` | `flex-shrink: 0; width: 320px` (360px at 1400px+), `border-radius: 20px`, hover lift |
+| `m1-dt-insights-grid` | 4-col grid, `gap: 20px`, `align-items: start` |
+| `m1-dt-insight-featured` | `grid-column: span 2`, `border-radius: 28px`, `padding: 36px 32px` |
+| `m1-dt-insight-card` | `border-radius: 24px`, `padding: 24px 22px`, hover lift |
 
 #### `Month1CompletedContent` — Completion celebration
 
@@ -482,36 +577,54 @@ Contains a **demo toggle** ("Active" / "Completed") at the top using `useState<'
 
 ---
 
-### Month 2 Tab (`Month2Content`) — Redesigned
+### Month 2 Tab (`Month2Content`) — Foundation Building Experience
+
+**Design philosophy:** Confidence through consistency. The user should feel "I am becoming the kind of person who follows healthy habits." Sections removed: Today's Execution Center (duplicate of Complete Today's Journey), Results Dashboard / Five Pillars gallery (duplicate of Proof Your Efforts Are Working). Replaced with a compact coaching reinforcement block before Month 3 Preview.
 
 **State:**
 ```typescript
-const [goalChecked, setGoalChecked] = useState([true, true, false, false]);
 const [photos, setPhotos] = useState<string[]>([]);
 const fileInputRef = useRef<HTMLInputElement>(null);
 ```
 
-Additional local constant `HABIT_PILLARS` (5 items with `days`/`total` for progress bars). `goalChecked` drives both the habit pillar tap interaction and the original month goals toggle.
+**Mobile section order (top to bottom):**
+1. **Hero** (300px) — Walking photo, "Month 2 · In Progress" pill, "Build Healthy Habits" h2, clinical label, progress bar + "83% Consistent" pill.
+2. **Your Momentum** — 3 dark gradient cards: `+900 daily steps` / `82% meal adherence` / `14 day streak`.
+3. **My Transformation Story** — `MonthTransformationStory monthNum={2}` (passes `photos`, `handleFileChange`, `fileInputRef`).
+4. **DailyOperationsSection monthNum={2}** / **BiomarkerProgressShowcase**
+5. **Your Foundations Are Taking Shape** (`m2-mobile-only` wrapper, `padding: 24px 24px 0`):
+   - Section header (20px/900 title, muted subtitle)
+   - Strongest Foundation — 220px cinematic image card (movement photo, gradient, "Your Strongest Foundation" eyebrow, "Daily Movement" pill, headline + 2 stat pills)
+   - This Week's Focus — white card, gold eyebrow, "Protein At Breakfast" title, copy
+   - Coach Insight — sage-tinted card, Dr. Ananya avatar, italic quote
+6. **Month 3 Preview** — cinematic 200px image card, "Coming Next" eyebrow, 4 frosted tag pills.
 
-**Sections:**
+**Desktop section order — `m2-dt-*` classes:**
+1. **Hero + Momentum Workspace** (`m2-dt-hero-workspace`, 70/30 grid, 580px min-height):
+   - LEFT 70%: Cinematic walking photo, gradient layers, 56px/900 "Build Healthy Habits", animated 47% progress bar, "83% Consistent" pill, "Continue Journey" white CTA button.
+   - RIGHT 30% (`m2-dt-hero-right`, dark forest `#071710 → #0d1f14`): "Your Momentum" header, 3 stacked frosted cards (steps / meals / streak, large 36px values, ghost emoji watermarks).
+2. **My Transformation Story** — `MonthTransformationStory monthNum={2}`.
+3. **DailyOperationsSection monthNum={2}** / **BiomarkerProgressShowcase**
+4. **Your Foundations Are Taking Shape** (`#EEF3EF`, `padding: 56px 64px`):
+   - Compact header: "Month 2 · Foundations" eyebrow + 32px/900 title (no large editorial paragraph).
+   - `m2-dt-foundations-workspace` (65/35 grid, `gap: 32px`):
+     - LEFT 65%: Cinematic card (`minHeight: 360px`, `border-radius: 24px`) — movement photo, "Your Strongest Foundation" eyebrow, "Daily Movement" pill, 26px/900 headline, body copy, 3 stat pills, "View Habit Progress" ghost CTA.
+     - RIGHT 35% (`m2-dt-foundations-right`, flex column, `gap: 20px`): Coach Insight card (sage-tinted, Dr. Ananya avatar 40px, italic quote) + This Week's Focus card (white, gold eyebrow, "Protein At Breakfast" 18px/900, copy, "Learn Why" CTA).
+5. **Month 3 Preview** (cinematic full-bleed banner, `minHeight: 400px`) — dark navy gradient, animated indigo glow, 48px/900 "Sleep Better, Feel Better" title, 4 frosted tag pills, frosted countdown card ("16 days · Jul 9, 2026").
 
-1. **Hero** (300px) — Walking photo, "Month 2 · In Progress" pill, **"Build Healthy Habits"** h2, subtitle, clinical label "Foundation Building" in faint muted text, progress bar + **"83% Consistent"** pill in the hero bar row.
-
-2. **Your Momentum** — 3 dark gradient cards in a flex row (different gradient per card): `+900 daily steps` / `82% meal adherence` / `14 day streak`. Large value first, minimal label.
-
-3. **My Transformation Story** — `MonthTransformationStory monthNum={2}` (passes `photos`, `handleFileChange`, `fileInputRef`). Self-contained section — owns its own `#EEF3EF` background, padding, and "My Transformation Story" heading. See `MonthTransformationStory` above.
-
-4. **Today's Mission** — 3 large action cards. First ("Log all meals") shown as done (ticked, struck-through). Remaining two ("Reach 7,000 steps" / "Drink 2L water") shown as unchecked.
-
-5. **Building Your Habits** — 5 habit pillar cards. Each shows: 44px icon tile (turns sage ✓ on tap, driven by `goalChecked`), label, percentage, progress bar, microcopy + day count. Driven by `HABIT_PILLARS` data and `goalChecked` state.
-
-6. **Your Progress So Far** — 2×2 tinted cards with trend arrows: Weight ↓ Trending / Waist ↓ Reducing / Energy ↑ Improving / Movement ↑ Increasing.
-
-7. **This Month's Focus** — Horizontal scroll carousel, 5 tall portrait image cards (160px wide, 200px tall): Indian Plate / Daily Movement / Strength / Hydration / Cut Sugar. Edge-bleeds with negative margin.
-
-8. **Month 2 Wins Like** — 2×2 white icon cards (centred layout): Weight Trend / Movement / Meal Consistency / Daily Routine.
-
-9. **Month 3 Preview** — "Coming Next / Month 3 · Sleep Better, Feel Better", clinical label "Metabolic Correction", subtitle "Sleep. Recovery. Blood sugar optimisation.", 4 frosted tag pills. **`marginTop: 32px` (mobile only)** — creates visual separation from the "Month 2 Wins Like" section above.
+**`m2-dt-*` CSS classes:**
+| Class | Purpose |
+|---|---|
+| `m2-mobile-only` / `m2-desktop-only` | Visibility toggles |
+| `m2-dt-page` | `max-width: 1600px` container |
+| `m2-dt-section` | `padding: 72px 64px` (88px 80px at 1400px+) |
+| `m2-dt-section-sage` | `background: #EEF3EF` |
+| `m2-dt-hero-workspace` | 70/30 grid, `min-height: 580px` (660px at 1400px+) |
+| `m2-dt-hero-left` | Relative, overflow hidden |
+| `m2-dt-hero-right` | Dark forest gradient, flex column, bottom-justify |
+| `m2-dt-story-workspace` | 70/30 grid — used inside `MonthTransformationStory` |
+| `m2-dt-foundations-workspace` | 65/35 grid, `gap: 32px`, `align-items: start` |
+| `m2-dt-foundations-right` | Flex column, `gap: 20px` |
 
 ---
 
@@ -565,7 +678,62 @@ Uses the **dual-render architecture** (`lm-mobile-only` / `lm-desktop-only`). Th
 
 ---
 
-## 7. Progress Page (`progress/page.tsx`)
+## 7. Overview Page (`overview/page.tsx`)
+
+**Purpose:** Programme overview / onboarding landing page. Shown to prospective or not-yet-started members; also accessible during active programme as a programme summary.
+
+**Navigation model:** Standalone page at `/overview`. Not part of the Today tab system — no back nav pattern.
+
+**Demo toggle:** A fixed `Preview` segmented control in the top-right corner (`top: 64px, right: 16px, z-index: 500`, dark forest background) toggles `status` between `'not_started'` and `'active'` via `useState<ProgramStatus>`.
+
+**State:**
+```typescript
+type ProgramStatus = 'not_started' | 'active';
+const [status, setStatus] = useState<ProgramStatus>('not_started');
+```
+
+### `NotStartedOverview` — Pre-programme experience
+
+Marketing/onboarding view. 8 sections, all with `FadeIn` scroll-reveal animations (`whileInView`, `once: true`).
+
+**Sections:**
+1. **Hero** — Dark cinematic (`linear-gradient(155deg, #0A1A0C → #2A4030)`), 3 ambient radial glows. Centred `max-width: 760px`. Animated eyebrow pill, `clamp(32px,5vw,58px)` headline "A healthier, happier version of you starts here.", two CTAs: "Start My Transformation" → `/today?tab=month1` (sage primary) + "Explore The Journey" → `#roadmap` (ghost). 3 trust stats: 6 / 180+ / 5.
+2. **What could change in 6 months?** — White band. `ns-outcome-grid` (2-col → 4-col at 640px+). 8 `OUTCOMES` cards with sage tinted gradient background and hover lift.
+3. **Your Transformation Roadmap** (`id="roadmap"`) — Surface band. Vertical `MONTHS` list (max-width 760px). Each month is an expand/collapse button (`expandedMonth` state). Collapsed: white card with month badge, theme label, title. Expanded: dark gradient (per-month `m.gradient`), description + 4 `checkpoints` with `Check` icons. `ns-roadmap-line` SVG connectors between months.
+4. **What you'll receive** — White band. `ns-feature-grid` (2-col → 4-col at 768px+). 8 `FEATURES` cards with hover border highlight.
+5. **Your transformation story** — Dark forest cinematic band (`#0D1A10 → #2A4030`). 3-stage `ns-story-grid` (1-col → 3-col): Today / Month 3 / Month 6 — each with emoji, label, subtitle, description copy.
+6. **Why people succeed** — Surface band. `ns-reasons-grid` (1-col → 2-col → 3-col). 5 `REASONS` cards with sage check icon and hover lift.
+7. **Your first month** — White band. Single dark forest card (max-width 760px) — Month 1 overview with `MONTH1_ITEMS` checklist + "Begin Month 1" CTA → `/today?tab=month1`.
+8. **Final CTA** — Dark forest cinematic band. Centred 48px headline + sage primary CTA.
+
+**Local data constants:** `MONTHS` (6 entries — `num`, `theme`, `title`, `description`, `accent`, `accentLight`, `gradient`, `dotColor`, `checkpoints[]`), `OUTCOMES` (8 items), `FEATURES` (8 items), `REASONS` (5 items), `MONTH1_ITEMS` (6 strings).
+
+**`FadeIn` component:** `motion.div` with `initial={{ opacity: 0, y: 18 }}`, `whileInView`, `viewport={{ once: true, margin: '-40px' }}`, optional `delay` prop.
+
+**CSS classes (inline `<style>`):**
+
+| Class | Purpose |
+|---|---|
+| `ns-mobile` / `ns-desktop` | Dual-render toggles (desktop activates at 1024px+) |
+| `ns-dt-inner` | `max-width: 1200px; padding: 0 64px` |
+| `ns-dt-section` / `ns-dt-section-sm` | `96px / 72px` vertical padding |
+| `ns-outcome-grid` | 2-col → 4-col responsive grid |
+| `ns-feature-grid` | 2-col → 4-col responsive grid |
+| `ns-roadmap-line` | Vertical connector line (2px, sage gradient, 40px tall) |
+| `ns-cta-primary` | Sage green CTA button with hover lift |
+| `ns-cta-secondary` | Ghost CTA button on dark backgrounds |
+| `ns-reasons-grid` | 1-col → 2-col → 3-col responsive grid |
+| `ns-story-grid` | 1-col → 3-col responsive grid |
+
+### Active state
+
+When `status === 'active'`: renders `ContinueJourneyBanner` component + a white card redirecting to `/today`.
+
+**`ContinueJourneyBanner`:** Dark forest card (`#1C2B1E → #3A5C3E`). Left: conic progress ring (47% filled), month label, Day 14 of 30, % complete + days remaining. Right: "Continue Journey →" ghost button → `/today?tab=month2`. Bottom: animated Framer Motion progress bar (width 0 → 47%). Constants: `ACTIVE_MONTH_NUM = 2`, `ACTIVE_PCT = 47`, `ACTIVE_DAY = 14`, `ACTIVE_DAYS_TOTAL = 30`.
+
+---
+
+## 8. Progress Page (`progress/page.tsx`)
 
 **Navigation model:** Secondary experience. Accessed from the "View Your Progress" nav card in the Health Overview carousel (Overview desktop: "View health report →" link in Today's Focus card). Returns to `/today` via sticky back header.
 
@@ -622,7 +790,7 @@ const loggedCount = 2; // Month 1 and 2 logged
 
 ---
 
-## 8. Community Page (`community/page.tsx`)
+## 9. Community Page (`community/page.tsx`)
 
 **Navigation model:** Secondary experience. Accessed from the "View All Stories" nav card in the Member Success Stories carousel. Returns to `/today` via sticky back header.
 
@@ -677,7 +845,7 @@ const [expandedStory, setExpandedStory] = useState<number | null>(null);
 
 ---
 
-## 9. Journey Page (`journey/page.tsx`)
+## 10. Journey Page (`journey/page.tsx`)
 
 **Navigation model:** Secondary experience. Reached via "View Your Complete Journey →" CTA in the `TransformationJourney` component (Overview tab). Returns to `/today` via sticky back header.
 
@@ -750,7 +918,7 @@ Uses alternating section bands as distinct narrative "acts":
 
 ---
 
-## 10. Mobile App (`apps/mobile`)
+## 11. Mobile App (`apps/mobile`)
 
 ### File Structure
 
@@ -813,7 +981,7 @@ Bottom tab navigator with 5 tabs:
 
 ---
 
-## 11. Component Inventory
+## 12. Component Inventory
 
 ### Web Components
 
@@ -822,22 +990,27 @@ Bottom tab navigator with 5 tabs:
 | `MiniBarChart` | `today/page.tsx` | 7-bar CSS chart |
 | `Badge` | `today/page.tsx` | poor/fair/good status |
 | `MetricCard` | `today/page.tsx` | Health metric card with chart |
-| `WorkflowCard` | `today/page.tsx` | Coaching toolkit tile |
+| `WorkflowCard` | `today/page.tsx` | Coaching toolkit tile (still used in mobile Health Programme section; desktop replaced by `EarnTodayCarousel`) |
+| `EarnTodayCarousel` | `today/page.tsx` | **Primary execution hub.** Horizontal-scroll carousel of 9 cinematic action cards (200×250px). Cards: Meal, Exercise, Water, Sleep, Sunlight, Meditation, Mood, Biomarkers, Daily Nudges. Full-bleed photography, dark gradient overlay, glassmorphism status pill (top-right), H+ badge bottom-left. Completion state: sage ring shadow + tinted overlay. Rendered in both the mobile (`ov-prog-inner-split` right column) and desktop dark band (replacing "Your Tools" carousel). Props: `categoryProgress`, `hplus`, `onOpen`, `loggedToday`. |
+| `ActionLoggingModal` | `today/page.tsx` | **Premium cinematic logging modal — unified framework.** Centered dark modal (`max-width: 760px`, `border-radius: 28px`, dark forest `#0a1a0d`), spring scale-in, backdrop blur 8px. **Unified header** (all steps except success): ‹ back button (mid-flow, computed from `backMap` per type) or × close (entry step), activity label in uppercase, live H+ reward pill showing remaining cap for that category (e.g. "+4 H+ available" or "✓ Cap reached"). **Shared framework components** defined inside the function: `StepIndicator` (segmented progress bar, `current/total`, per-flow accent colour — same component across all 8 flows), `HeroImageBand` (180px full-bleed image, `sublabel` eyebrow, `coachNote` italic line), `ActivityDateTimeSelector` (see below), `LastLoggedBar` (historical context text, italic, muted — not KPI metrics), `SuccessScreen` (universal, see below). **`ActivityDateTimeSelector`** — two glassmorphism pill selectors placed below `StepIndicator` on every step of every flow: (1) **Date pill** — displays "Today", "Yesterday", or `formatDateDisplay(ISO)` (e.g. "Jun 18, 2026"). Backed by a hidden native `<input type="date" max={todayISO}>` — tap opens OS date picker. Default: today's ISO date. (2) **Time pill** — displays formatted 12h time (e.g. "2:28 PM"). Backed by a hidden native `<input type="time">` — tap opens OS time picker. State: `logDate: string` (ISO `'YYYY-MM-DD'`), `logTime: string` (24h `'HH:MM'`). Both reset in `close()`. Both flow through to `sheet.logDate`/`sheet.logTime` at every step transition and are shown on the success screen. **No KPI dashboard metrics** inside logging flows — no "X meals logged today", no targets, no streak counts, no goal progress bars. The only contextual information shown is historical (e.g. "Last reading: Blood Pressure · 118/76 · 3 days ago" via `LastLoggedBar` on the biomarker picker; "Sleep is typically logged in the morning for the previous night" hint on sleep step 1). **`SuccessScreen`** — unified tailored success, auto-closes after 3.2s. Contains: animated sage/gold ambient glows, spring check badge, `details` prop (array of `{icon, label, value}` pill cards showing what was actually logged — activity/duration/intensity for exercise, hours/quality/sunlight for sleep, glucose value/context for biomarkers, mood label/influences for mood etc.), `+{pts} H+` in 52px gold, score transition (`prev → new`), 🔥 streak pill, italic coaching subtitle. **Meal (5-step plan path, 3 alternative paths):** `slot-select` → `plan-meal` → `adherence` → `adherence-changes` (conditional) → `components` → `portion` → `success`. Custom path: `slot-select` → (any step) → `custom-meal` → `success`. History path: `plan-meal` tap → `portion` → `success`. Every step has `HeroImageBand` (slot image), `StepIndicator` (1–5/5), `ActivityDateTimeSelector`. **Portion step** requires explicit chip selection — no silent 100% default; submit button disabled until a chip is tapped. **Exercise (4 steps):** `pick` (8 cinematic image cards: Walk/Running/Cycling/Strength/Yoga/Swimming/Sports/Stretching) → `duration` (premium glassmorphism selector: large 80px number, draggable, `−`/`+` circular 64px buttons with long-press acceleration, quick-select strip below of 6 preset cards 15/20/30/45/60/90 min that sync back to the selector; encouragement copy keyed to range; "Confirm X min →" CTA) → `intensity` (4 list rows: Easy/Moderate/Vigorous/Athletic with colour accent bars) → `reflection` (2×2 feeling cards: Energising/Good/Challenging/Very Hard, log button required) → `success`. State: `exerciseDuration` (number, default 30), `longPressRef`, `dragStartY`, `dragStartVal`. **Water (2 steps):** `pick` (premium hydration counter: large glass count with 💧 emoji, `−`/`+` 60px circular buttons, animated 💧×10 progress row "X/10 glasses today", ml label below, motivational message keyed to range, "Log X Glasses (Yml) →" CTA) → `context` (4 time-of-day cards + "Skip · Log now") → `success`. State: `waterGlasses` (number, default 1). **Sleep (4 steps):** `bedtime` (combined bedtime + wake time step — two premium tappable `<motion.button>` selector cards that call `showPicker()` on hidden off-screen `<input type="time">` refs; live "Estimated Sleep" duration card with animated copy keyed to duration range; `to24()`/`to12()` converter helpers; `bedtimeInputRef`/`waketimeInputRef` refs; `LastLoggedBar` hint) → `quality` (4 list rows: Excellent/Good/Fair/Poor) → `interruptions` (4 chips: 0/1/2/3+) → `sunlight-prompt` (2 large cards: Yes/No + skip) → `success` (shows duration, quality, sunlight details). Step count reduced from 5 to 4 (bedtime+waketime merged into one screen). State: `sleepBedtime` (default '10:30 PM'), `sleepWaketime` (default '6:30 AM'), `bedtimeInputRef`, `waketimeInputRef`. **Sunlight (1 step):** `pick` (premium experience — benefit reinforcement card showing live minute count + "Supports: Energy / Sleep Quality / Circadian Rhythm" checkmarks; glassmorphism duration selector with breathing amber glow, 80px number, 64px `−`/`+` buttons, long-press; coaching message keyed to range; "Log X min of Sunlight →" CTA) → `success`. State: `sunlightMinutes` (default 10), `sunlightLongPressRef`. **Meditation (multi-path flow):** `pick` (mindfulness check-in — two premium choice cards: "I Already Meditated" / "I'd Like To Meditate Now") → **Path A** `log-duration` (premium duration selector + "Log X min →" CTA, awards +4 H+) → `success`. **Path B** `feeling` (5 emotional state cards: Overwhelmed/Stressed/Distracted/Tired/Feeling Good, each with supporting microcopy) → `session-prep` (recommendation card keyed to feeling — title/description/suggested duration — + duration selector + "▶ Begin Session" CTA) → `active` (full-screen live timer experience: dark premium gradient, breathing circle animation expanding/contracting on 3.8s cycle with Inhale/Exhale label, mm:ss countdown, thin progress bar, rotating gentle prompts every 2 min, Pause/Resume + End Session controls; timer interval started inline when step renders if not already running) → `post-feeling` (5 emoji reflection cards: 😔/😐/🙂/😌/😁) → `success` (shows mood arrow, session length, +4 H+). State: `meditationMinutes` (default 10), `meditationSecsLeft`, `meditationPaused`, `meditationPromptIdx`, `breathPhase` ('inhale'|'exhale'), `meditationTimerRef`, `meditationBreathRef`, `meditationLongPressRef`. LoggingSheet adds: `feeling?`, `postFeeling?`, `sessionType?: 'log'|'live'`. **Mood (3 steps):** `pick` (3×2 grid: 😁 Great/🙂 Good/😐 Okay/😔 Low/😣 Stressed/😡 Frustrated) → `influences` (multi-select chips: Work/Family/Health/Sleep/Exercise/Food/Relationships/Finances/Travel/Self Care/Other + "Skip — log now") → `reflection` (contextual journal prompt textarea + "Skip reflection") → `success` (shows mood label + top influences). **Biomarkers (redesigned hub + 4 paths):** `pick` — premium progress hub (no image cards; full-width stacked progress cards showing last value, trend badge e.g. "↓ 2.8 kg since Month 1", last-updated age, animated entrance; tap opens metric). Glucose: `glucose-context` (5 list rows) → `glucose-value` (premium ± selector at 94 default, live interpretation message, "Save X mg/dL →" CTA) → `success`. BP: `bp-entry` — **single-screen** (large live "SYS / DIA" preview; two side-by-side panels each with 44px animated value + 44px `−`/`+` buttons; live coloured interpretation badge: Normal Range/Slightly Elevated/Above Normal/High; "Save SYS/DIA mmHg →" CTA). Weight: `weight-value` (premium ± selector at 70.4 kg default stored ×10; Last Reading + Change context cards; live encouragement copy keyed to delta; "Save X kg →" CTA) → `weight-timing` (2 cards: Morning/Evening) → `success`. Waist: `waist-value` (premium ± selector at 90 cm default; Last Reading + Change context cards; measurement tip; encouragement copy; "Save X cm →") → `success`. **All biomarker successes** show a custom per-metric success screen (large reading as headline, trend badge, story copy, ✓ +2 H+ pill, Done CTA) rather than the generic `SuccessScreen`. State: `bioNumVal` (default 700, used for all ± selectors; weight stored ×10), `bioNum2Val` (default 800, used for BP diastolic), `bioLPRef`, `bioLP2Ref`. **`LoggingSheet` union:** Meal — `logDate: string` (ISO), `logTime: string` (24h HH:MM). Exercise — adds `intensity`, `feeling`. Water — adds `context`. Sleep — adds `bedtime`, `waketime`, `quality`, `interruptions`, `morningLight`. Meditation — adds `feeling?`, `postFeeling?`, `sessionType?: 'log'|'live'`. Mood — adds `moodLabel`, `influences[]`. Biomarker — adds `value2` (BP diastolic), `context`, `timing`. Biomarker step union updated to: `'pick' | 'glucose-context' | 'glucose-value' | 'bp-entry' | 'weight-value' | 'weight-timing' | 'waist-value' | 'success'`. |
 | `ArticleCard` | `today/page.tsx` | Editorial content card |
 | `Month1Content` | `today/page.tsx` | Demo toggle wrapper — injects `m1-*` CSS, renders `Month1ActiveContent` or `Month1CompletedContent` |
-| `Month1ActiveContent` | `today/page.tsx` | Dual-render: Mobile — 7 sections (incl. MonthTransformationStory + **BiomarkerProgressShowcase**). Desktop (`m1-dt-*`) — Discovery Hero Workspace (65/35), **MonthTransformationStory**, **BiomarkerProgressShowcase**, Understanding You Workspace (50/50), Mission 5-col grid, Month 2 Preview banner |
+| `Month1ActiveContent` | `today/page.tsx` | Dual-render. State: `discoveryDone[8]`. Mobile — Hero, Health Journey timeline, **DiscoveryJourneySection** (carousel + "Your Health Story" progress), **MonthTransformationStory**, **DailyOperationsSection**, **BiomarkerProgressShowcase**, **Insights You've Unlocked** (dynamic, empty state when none), Starting Point, Month 2 Preview. Desktop (`m1-dt-*`) — Discovery Hero Workspace (65/35), **DiscoveryJourneySectionDesktop** (white band, carousel 320px cards, "Your Health Story" widget), **MonthTransformationStory**, **DailyOperationsSection**, **BiomarkerProgressShowcase**, **Insights You've Unlocked** (4-col `m1-dt-insights-grid`: featured card spans 2 cols + regular insight cards), Starting Point 50/50, Month 2 Preview. The "Focus on Awareness, Not Perfection" mission checklist was removed. |
 | `Month1CompletedContent` | `today/page.tsx` | Dual-render: Mobile — 7 sections. Desktop (`m1-dt-*`) — 5 sections: Completion Hero, Achievement Workspace (70/30), Journey Reflection (60/40), Next Chapter dark band, Share Achievement (60/40) |
-| `Month2Content` | `today/page.tsx` | Dual-render active month: Mobile — 9 sections (incl. MonthTransformationStory + **BiomarkerProgressShowcase**). Desktop (`m2-dt-*`) — cinematic hero (70/30), **`MonthTransformationStory`** (bare call — section wrapper/header owned by MTS), **BiomarkerProgressShowcase**, execution grid, results row, focus gallery |
-| `LockedMonthContent` | `today/page.tsx` | Dual-render future chapter: Mobile — grayscale preview + full-colour MonthTransformationStory + **BiomarkerProgressShowcase** + unlock CTA. Desktop (`lm-dt-*`) — Cinematic Hero (70/30), Chapter Preview (35/65), Pillars Gallery (4-col), Outcomes Dashboard (4-col), Transformation Story (full colour), **BiomarkerProgressShowcase**, Cinematic CTA banner |
+| `Month2Content` | `today/page.tsx` | Dual-render active month. State: `photos[]`, `fileInputRef`. **Removed:** `goalChecked`, `HABIT_PILLARS`, Today's Execution Center, Results Dashboard, Five Pillars gallery. Mobile — Hero, Your Momentum (3 dark cards), **MonthTransformationStory**, **DailyOperationsSection**, **BiomarkerProgressShowcase**, **Your Foundations Are Taking Shape** (cinematic foundation card + This Week's Focus + Coach Insight), Month 3 Preview. Desktop (`m2-dt-*`) — cinematic hero (70/30), **MonthTransformationStory**, **DailyOperationsSection**, **BiomarkerProgressShowcase**, **Your Foundations Are Taking Shape** (`#EEF3EF`, 65/35: left cinematic card 360px min-height / right: Coach Insight + This Week's Focus stacked), Month 3 Preview banner. |
+| `LockedMonthContent` | `today/page.tsx` | Dual-render future chapter: Mobile — grayscale preview + full-colour MonthTransformationStory → **DailyOperationsSection** → **BiomarkerProgressShowcase** + unlock CTA. Desktop (`lm-dt-*`) — Cinematic Hero (70/30), Chapter Preview (35/65), Pillars Gallery (4-col), Outcomes Dashboard (4-col), Transformation Story (full colour), **DailyOperationsSection**, **BiomarkerProgressShowcase**, Cinematic CTA banner |
+| `DailyOperationsSection` | `today/page.tsx` | **Reusable daily execution hub inserted on all 6 monthly tabs, immediately after `MonthTransformationStory`.** Props: `monthNum: number`. Reads live data from `useHPlusStore()`. Owns its own `ActionLoggingModal` instance with shim dispatchers. **Desktop** (`dos-dt-section`, `#EEF3EF` sage band, `dos-dt-workspace` 70/30): Left 70% (`dos-dt-left`, `min-width: 0; overflow: hidden`) — dark forest container with `EarnTodayCarousel`. Right 30% (`dos-dt-right`, sticky `top: 88px`) — Mission Status card (dark forest, 120px SVG ring with sage→gold gradient, completion fraction, H+ earned badge, 5-item animated checklist) + Daily Streak card (white, 🔥, streak/30-day bar). **Mobile** (`dos-mobile-only`, `#EEF3EF`): header → Mission Status → Streak → carousel. CSS classes: `dos-mobile-only`/`dos-desktop-only`, `dos-dt-section`, `dos-dt-inner`, `dos-dt-workspace`, `dos-dt-left`, `dos-dt-right`. |
 | `MonthTransformationStory` | `today/page.tsx` | Shared per-month story component inserted on all 6 month tabs. Props: `monthNum`, `uploadedPhotos?`, `onUpload?`, `fileRef?`. **Desktop architecture:** The component is fully self-contained — it owns its own section wrapper (`mts-dt-section`: `background: #EEF3EF`, `padding: 72px 64px`, `88px 80px` at ≥1400px), inner container (`mts-dt-section-inner`: `max-width: 1400px; margin: 0 auto`), and section header ("Your Documentary" eyebrow + "My Transformation Story" h2 at 32px/900). All call sites pass a bare `<MonthTransformationStory />` with no outer wrappers — layout is identical across all months. **Mobile sections** top-to-bottom: (1) **Story header** — dark gradient with 2 animated Framer Motion glows + 3 stat chips; visual identity from `STORY_HEADER_DESIGN[monthNum]`. (2) **Transformation reel** — 5 circular photo slots with gradient ring (uses uploaded photos). (3) **"Capture Today's Win" CTA strip** — file upload interface. (4) **Journey Highlights 2×2 grid** — month-specific achievements from `STORY_MILESTONES[monthNum]`. (5) **"View My Complete Journey" CTA** → `/journey`. (6) **`NutritionStrategyCard`** — `variant="default"` in the mobile layout; `variant="month"` in the desktop right column. (7) **Reflection card** — prompt + future vision copy from `CHAPTER_STORY_DATA[monthNum].reflectionPrompt` / `futureCopy`. **Desktop layout** (`mts-dt-workspace`, 70/30 grid): Left 70% (`mts-dt-left`, `gap: 24px`) — cinematic story header, photo reel card (`mts-dt-reel-grid` 5-col), upload CTA button, documentary journey CTA. Right 30% (`mts-dt-right`, sticky `top: 88px`) — reflection card, journey highlights (`mts-dt-highlights-grid` 2×2), `NutritionStrategyCard variant="month"`. |
-| `NutritionStrategyCard` | `today/page.tsx` | **Fixed-height nutrition entitlement demo component.** Prop: `variant?: 'default' \| 'month'` (default: `'default'`). Accepts a segmented demo control with 3 tabs — **Coach Supported**, **DIY Builder**, **Assigned Plan** — backed by `useState<NutritionMode>`. **Architecture:** All 3 state panels are always in the DOM inside a single fixed-height content shell (`position: relative; height: contentH; overflow: hidden`). Each panel is `position: absolute; inset: 0` — only `opacity` and `pointerEvents` toggle on mode change. The outer container never reflows or changes height. `contentH` = `300px` (month) / `360px` (default). **State A — Coach Supported:** warm gold/amber gradient (`#2A1800 → #B07828`), 3 feature badges, optional Dr. Ananya avatar row (hidden in compact), headline, copy, gold CTA "Request My Meal Plan", "48 hours" note. **State B — DIY Builder:** warm cream palette (`#FAF5EC → #EDD9B0`), 3 earthy badges, optional framework icon row (hidden in compact), headline, copy, sage CTA "Create My Own Meal Plan". **State C — Assigned Plan:** dark forest (`#071710 → #163326`), header row ("Week 3 Nutrition Plan" + "75% today"), **peekable meal rail** (fixed height `railH`, `overflow-x: auto`, `scroll-snap-type: x mandatory`, right-edge fade gradient), progress bar strip, primary CTA "View Full Meal Plan" + ghost secondary "Request Adjustments". CTAs are wrapped in `.ns-assigned-ctas` — on desktop (`≥1024px`) both buttons become `width: fit-content` (min-width 240px primary / 200px secondary) and the wrapper is `align-items: center` so they centre-align and lose the full-width bar appearance; on mobile both remain full-width for tap target. **Meal rail data:** `NS_MEALS` (5 items — Breakfast/Lunch/Snack/Dinner/Weekend — each with `category`, `name`, `kcal`, `protein`, `color`, `colorDim`, `emoji`). **Compact sizing** (`variant="month"`): `contentH=300px`, `bp=12px 14px`, `mealW=130px`, `imgH=50px`, `railH=128px`, Panel C gap `8px` — coach avatar and framework icon row hidden, headlines shortened. **Full sizing** (`variant="default"`): `contentH=360px`, `bp=16px 18px`, `mealW=152px`, `imgH=76px`, `railH=160px`, Panel C gap `9px`. **CSS classes:** `ns-seg`, `ns-seg-btn`, `ns-badge`, `ns-meal-rail`, `ns-meal-tile`, `ns-cta-p`, `ns-cta-g`, `ns-pbar-track`, `ns-pbar-fill`, `ns-assigned-ctas` — all injected as inline `<style>`. **Placements:** (1) `MonthTransformationStory` mobile right column — `variant="default"`. (2) `MonthTransformationStory` desktop right column — `variant="month"`. (3) Overview desktop — 2-col row below `ov-dt-story-workspace` (paired with Future Self Preview card) — `variant="default"`. (4) Mobile Overview — inserted after `<BiomarkerProgressShowcase />`, before Today's Focus card, with "Your Nutrition" eyebrow label — `variant="default"`. |
+| `NutritionStrategyCard` | `today/page.tsx` | **Fixed-height nutrition entitlement demo component.** Prop: `variant?: 'default' \| 'month'` (default: `'default'`). Accepts a segmented demo control with 3 tabs — **Coach Supported**, **DIY Builder**, **Assigned Plan** — backed by `useState<NutritionMode>`. Also holds `useState<BlueprintData \| null>(null)` for the wizard result. **Architecture:** All 3 state panels are always in the DOM inside a single fixed-height content shell (`position: relative; height: contentH; overflow: hidden`). Each panel is `position: absolute; inset: 0` — only `opacity` and `pointerEvents` toggle on mode change. The outer container never reflows or changes height. `contentH` = `300px` (month) / `360px` (default). **State A — Coach Supported:** warm gold/amber gradient (`#2A1800 → #B07828`), 3 feature badges, optional Dr. Ananya avatar row (hidden in compact), headline, copy, gold CTA "Request My Meal Plan", "48 hours" note. **State B — DIY Builder:** warm cream palette (`#FAF5EC → #EDD9B0`), 3 earthy badges, optional framework icon row (hidden in compact), headline, copy, sage CTA **"Create My Own Meal Plan"** — clicking this opens `NutritionBlueprintWizard` via `useState<boolean>(false)`. On wizard completion, `handleBlueprintComplete(data)` stores the `BlueprintData`, closes the wizard, and sets `mode` to `'assigned'`. **State C — Assigned Plan:** dark forest (`#071710 → #163326`), header row (title from `generatePlanTitle(blueprint)` when a blueprint exists, else "Week 3 Nutrition Plan"; a "Generated from your Nutrition Blueprint" badge shown when blueprint active), "75% today", **peekable meal rail** (fixed height `railH`, `overflow-x: auto`, `scroll-snap-type: x mandatory`) — meals sourced from `generateMeals(blueprint)` when blueprint exists, else `NS_MEALS`. Right-edge fade gradient. Progress bar strip. Primary CTA **"View Full Meal Plan"** → `/daily-plan` (rendered as `<a>` tag). Ghost secondary "Request Adjustments". **Meal rail data:** `NS_MEALS` (5 default items — Breakfast/Lunch/Snack/Dinner/Weekend). When a blueprint is active, `generateMeals()` returns region+diet-matched meals from `MEAL_DB` inside `NutritionBlueprintWizard.tsx`. **Compact sizing** (`variant="month"`): `contentH=300px`, `bp=12px 14px`, `mealW=130px`, `imgH=50px`, `railH=128px`, Panel C gap `8px` — coach avatar and framework icon row hidden, headlines shortened. **Full sizing** (`variant="default"`): `contentH=360px`, `bp=16px 18px`, `mealW=152px`, `imgH=76px`, `railH=160px`, Panel C gap `9px`. **CSS classes:** `ns-seg`, `ns-seg-btn`, `ns-badge`, `ns-meal-rail`, `ns-meal-tile`, `ns-cta-p`, `ns-cta-g`, `ns-pbar-track`, `ns-pbar-fill`, `ns-assigned-ctas` — all injected as inline `<style>`. **Placements:** (1) `MonthTransformationStory` mobile right column — `variant="default"`. (2) `MonthTransformationStory` desktop right column — `variant="month"`. (3) Overview desktop — 2-col row below `ov-dt-story-workspace` (paired with Future Self Preview card) — `variant="default"`. (4) Mobile Overview — inserted after `<BiomarkerProgressShowcase />`, before Today's Focus card, with "Your Nutrition" eyebrow label — `variant="default"`. |
+| `NutritionBlueprintWizard` | `components/NutritionBlueprintWizard.tsx` | **5-step personalised meal plan onboarding wizard.** Rendered as a React portal over the page (`createPortal` into `document.body`). Props: `onComplete(data: BlueprintData)`, `onClose()`. **Steps:** (1) Goal — 12 options, **single-select, auto-advances after 200ms** (`advanceAfterSelection` helper). (2) Medical Conditions — 16 options, multi-select, searchable chip grid (3-col desktop / 2-col mobile), Continue button required, supports "None" exclusive select. (3) Symptoms — 25 options, multi-select, same searchable chip grid, Continue button required. (4) Dietary Preference — 2 options (Vegetarian / Non-Vegetarian), large centred cards, **single-select, auto-advances after 200ms**. (5) Culinary Preference — 22 regional Indian cuisines, **single-select, auto-advances after 200ms**, searchable cards with short + sub-label. **Auto-advance helper:** `advanceAfterSelection(saveFn)` — calls `saveFn()` immediately (so selected state renders), then calls `goNext()` via `setTimeout(..., 200)`. Used on Steps 1, 4, 5. Footer Continue button only rendered for Steps 2 and 3. Header Back/Cancel always rendered for steps 0–4. **Flow after step 5:** Generation screen (dark forest gradient, 6 checklist items animated sequentially, 800ms final hold before advancing). Then **Meal Plan Preview** screen (step 6). **Meal Plan Preview:** full editorial scroll experience. Compact dark hero strip (plan title from `generatePlanTitle`, "Scroll through your daily meal journey below" subtitle). Vertical list of meal blocks — one per meal (Breakfast/Lunch/Snack/Dinner/Weekend). Each block: eyebrow row (32px coloured dot + time label + category heading), full-bleed hero image (220px mobile / 270px tablet / 300px desktop, `object-fit: cover`, gradient overlay, meal name + nutrition chips over image), horizontal options rail (`.nbw-meal-opts-rail`) containing one `.nbw-meal-opt-card` per option — architecture supports multiple options per slot. **Scroll-gated activation:** `previewScrolled` state (default `false`). `onScroll` handler on `.nbw-content` sets `previewScrolled = true` when within 160px of bottom. Activation card (`nbw-activate-card`) only appears (`AnimatePresence` fade-up, `y: 24→0`) after `previewScrolled` is true — inline at document end, not sticky/floating. Activation card: dark forest background, "Ready to start?" eyebrow, plan description, **"Activate My Meal Plan"** primary CTA, **"Edit My Answers"** secondary (returns to step 0 preserving all form state). **`goBack` from step 6** → `setStep(0)` (not step 4) — user returns to Goal selection with all prior answers intact. **`MEAL_IMGS`** lookup (~80 entries) maps every `MEAL_DB` meal name to a real Unsplash URL (`?w=800&q=85`); `FALLBACK` used when name not found. **On activation:** calls `onComplete(BlueprintData)`. **State:** `goal`, `conditions[]`, `symptoms[]`, `dietPreference`, `culinaryPreference`, `genProgress`, `previewScrolled`, `mounted`. **Container:** 980px centered modal on desktop (dark forest gradient, 28px radius, spring entrance animation). Full-screen on mobile. Frosted backdrop. `.nbw-content` padding overridden to `0` on step 6 (meal blocks are edge-to-edge). **Exports:** default `NutritionBlueprintWizard`, `type BlueprintData`, `generateMeals(blueprint): NsMeal[]`, `generatePlanTitle(blueprint): string`. `MEAL_DB` has ~24 entries covering South Indian, North Indian, Maharashtrian, Gujarati, Rajasthani, Bengali, Kerala, Kashmiri, Mughalai + default fallbacks. **CSS classes (preview screen):** `nbw-meal-block`, `nbw-meal-eyebrow`, `nbw-meal-dot`, `nbw-meal-hero-wrap`, `nbw-meal-hero-img`, `nbw-meal-opts-rail`, `nbw-meal-opt-card`, `nbw-meal-opt-img-wrap`, `nbw-meal-opt-img`, `nbw-activate-card` (all injected as inline `<style>`). |
 | `BiomarkerProgressShowcase` | `today/page.tsx` | **Premium health intelligence showcase.** Dual-render architecture — separate mobile and desktop DOM trees. **Mobile** (unchanged): `bps-mobile-header` + `bps-mobile-chips` + `bps-mobile-track` — horizontal swipe carousel (`scroll-snap-type: x mandatory`) showing all 6 dark editorial cards (Weight, Blood Pressure, Waist, Glucose, Activity, Sleep) plus a final "Explore Every Health Trend" nav card → `/progress`. All mobile markup hidden at ≥1024px. **Desktop** (`bps-dt-shell`, shown at ≥1024px only): (1) **Header row** — large 44px/900 headline left, "SCROLL TO EXPLORE" hint + `ArrowRight` right. (2) **KPI chips strip** (`bps-dt-chips`) — 4 animated pills that count up from 0 on first viewport reveal via `IntersectionObserver`. (3) **Horizontal scrollable carousel** (`bps-dt-track`) — `overflow-x: auto`, `scroll-snap-type: x mandatory`, `scroll-behavior: smooth`. Cards are `clamp(280px, 29vw, 360px)` wide → ~3.2 cards visible at once, all 6 biomarker cards shown. `useEffect` wires `wheel` events on `dtTrackRef` to convert vertical deltaY to horizontal scroll (only intercepted when not at edge). `cursor: grab` / `grabbing`. (4) Each **desktop biomarker card** (`bps-dt-card`) is 440px tall, 28px radius, 52px/900 value, chart rendered with `BpsChart tall` prop (larger, richer), month axis, frosted-glass insight quote. (5) **"Explore Your Complete Progress" final card** — dark forest gradient, ambient sage glows, large `ArrowRight` circle (56px top-right), editorial stacked copy ("Every biomarker. / Every milestone. / Every trend."), "View Progress →" badge, entire `<a>` clickable → `/progress`. No standalone CTA below the carousel. Placed in Overview desktop inside `<div className="ov-dt-bleed">` to break out of `ov-dt-body` padding. CSS injected as `bps-*` inline style classes. |
 | `BpsChart` | `today/page.tsx` | SVG sub-component used by `BiomarkerProgressShowcase`. Props: `metric` (a `BPS_METRIC_DATA` entry) + optional `tall?: boolean`. **Standard** (W=240, H=88): used on mobile cards. **Tall** (W=320, H=160): used on desktop 440px cards — richer area fill (0.42 opacity), stronger glow (stdDeviation 4.5), larger endpoint rings, heavier line (3px). Both variants: smooth polyline (logged months solid, projected dashed), soft area fill with per-metric gradient, glowing endpoint (three-layer: large dim circle → coloured glow → white highlight dot), subtle logged dots, 2-line minimal grid. Per-metric unique `gradId` / `glowId` SVG filter IDs (tall variant prefixed `lg-`) avoid conflicts between multiple renders on the same page. |
-| `HealthConciergeModal` | `(app)/layout.tsx` | Global FAB + responsive premium modal — mobile: 88vh bottom-sheet (spring slide), desktop: centered `min(92vw,1400px)×min(85vh,900px)` fade+scale modal with 65/35 column layout. 7 sections, conditional `HAS_COACHING` sections, GPU-composited, single-scroll-wrapper architecture |
+| `HealthConciergeModal` | `(app)/layout.tsx` | Global FAB + responsive premium modal — mobile: 88vh bottom-sheet (spring slide), desktop: centered `min(92vw,1400px)×min(85vh,900px)` fade+scale modal with 65/35 column layout. **8 sections** (added YOUR DAILY NUDGES as section 6 in right col), conditional `HAS_COACHING` sections, GPU-composited, single-scroll-wrapper architecture |
+| `NudgesPage` | `nudges/page.tsx` | Nudge Library — dual-render (`nudge-mobile-only`/`nudge-desktop-only`). Mobile: single-column cards. Desktop: dark hero band with stat cluster + filter pills, 2-col card grid. Filter pills for 13 health goals (Weight Loss + Reduce Blood Pressure pre-selected). `NudgeCard` (toggle + frequency badge + inline schedule editor). `ScheduleEditor` (time input + day checkboxes + save). `Toggle` (custom switch component). |
 | `DesktopStoryCard` | `community/page.tsx` | Desktop-only story card — 240px cinematic image with gradient overlay, month badge (colour-coded), hover lift, expandable pull-quote with sage left-border |
 | `LineChartLarge` | `progress/page.tsx` | Desktop SVG chart (760×280) — area fill under logged line, value labels, 5 gridlines, distinct logged vs projected visual |
 | `JourneyIndicator` | `today/page.tsx` | 6-node programme stepper + animated chapter cover card (dark gradient hero with 3 Framer Motion glows + focus pills strip) — mobile version |
-| `JourneyIndicatorDesktop` | `today/page.tsx` | Desktop variant of JourneyIndicator — phase stepper + chapter card optimised for the `ov-dt-journey-workspace` 65/35 left column |
+| `JourneyIndicatorDesktop` | `today/page.tsx` | Desktop variant of JourneyIndicator — phase stepper + chapter card, placed in `ov-dt-journey-left` (left column of `ov-dt-journey-workspace`). Chapter card hero reduced: `minHeight: 240px`, padding `32px 36px 36px`, icon 56px/18px, title 36px/900, tagline 14px. Focus pills padding `18px 36px 22px`. `CHAPTER_DESIGNS_DT` record provides per-month hero gradients and glow colours. Stepper uses `selectedPhase` prop with `onPhaseChange` callback to swap chapter via `AnimatePresence`. |
 | `TransformationJourney` | `today/page.tsx` | Visual progress sub-section in Overview (mobile only): hero photo swap (SECTION 1), Success Blueprint (SECTION 2), Transformation Timeline (SECTION 3 — formerly SECTION 4) with "Capture Today's Win" primary CTA bottom-left, Future Self Preview (SECTION 4), Journey Destination CTA → `/journey`. The Meal Planning / "Your Personalised Nutrition Plan" card has been removed. |
 | `OverviewContent` | `today/page.tsx` | Main dashboard |
 | `TodayPageInner` | `today/page.tsx` | Tab controller (uses `useSearchParams`) |
@@ -857,7 +1030,117 @@ Bottom tab navigator with 5 tabs:
 
 ---
 
-## 12. Data & State Management
+## 13. H+ Points System
+
+### Overview
+
+H+ is the member engagement and behaviour-reinforcement engine. Every healthy action earns 2 H+ points. Members start at 100 H+ (demo seeds at 428). Max 30 H+ per day from activity logging; biomarkers are counted outside the daily cap.
+
+### Configuration (`lib/hplus-types.ts` — `HPLUS_CONFIG`)
+
+```typescript
+const HPLUS_CONFIG = {
+  startingScore: 100,
+  pointsPerActivity: 2,
+  biomarkerPointsPerEntry: 2,
+  biomarkerCapMode: 'outside_daily_cap',  // configurable — do not hardcode
+  dailyMaxPoints: 30,
+  dailyCaps: {
+    meals: 14, exercise: 6, sleep: 2, sunlight: 2,
+    water: 2, meditation: 2, medication: 2, mood: 2,
+  },
+  referralPaidMemberBonus: 1000,
+  referralMilestoneBonus: 100,
+}
+```
+
+### Shared Store (`lib/hplus-store.ts`)
+
+Module-level singleton that survives Next.js client-side navigation within a session. **Also persisted to `sessionStorage`** (`key: 'hplus_session_state'`) so state survives full page reloads. Hydration happens at module load time — if a valid session entry exists it is used instead of `INITIAL_HPLUS`/`INITIAL_CATEGORIES`. Every `notify()` call serialises state to sessionStorage (score, categories, loggedToday array, newActivities with ISO timestamps). **Phase 2:** replace `logActivity()` with real API call.
+
+**Exports:**
+- `logActivity(category, points, label, value?)` — single write function. Updates score, todayPoints, category progress, loggedToday Set, newActivities array. Calls `persistState()` then notifies all subscribers.
+- `useHPlusStore()` — React hook. Subscribes to store on mount, re-reads fresh state (handles back-navigation). Returns `{ hplus, categories, loggedToday, newActivities }`.
+- `getState()` / `subscribe(fn)` — raw read + listener API for non-React contexts.
+- `ActivityCategory` type: `'meal' | 'exercise' | 'water' | 'sleep' | 'sunlight' | 'meditation' | 'mood' | 'biomarker'` (singular)
+- `CategoryProgress` interface: `{ category: string, emoji, label, current, max, hplusMax, color, accentBg }` — category uses **plural** keys (`'meals'`, `'biomarkers'`) matching `HPlusCategoryKey`
+- `HPlusEngineState` interface: `{ score, todayPoints, todayMax, streak, longestStreak, monthPerfectDays, perfectWeeks, monthRank }`
+
+**Key mapping:** Today page modal uses singular `ActivityCategory` keys; store `CategoryProgress` uses plural `HPlusCategoryKey` keys. `logActivity` maps `meal→meals`, `biomarker→biomarkers` internally. The `EarnTodayCarousel` also maps both ways for dispatch and `loggedToday` lookups.
+
+### Demo Data (`lib/hplus-demo-data.ts`)
+
+Static functions that return hardcoded data for the H+ page sections not yet driven by the store. **Phase 2:** replace each with an API call.
+
+- `getDemoActivities()` — demo timeline entries (used as fallback when no session logs exist)
+- `getAnalyticsData(period)` — day/week/month chart data
+- `getMonthCalendar()` — June 2026 perfect-day heatmap
+- `getAchievements()` — 8 achievements (4 earned, 4 locked), bronze/silver/gold/platinum tiers
+- `getLeaderboardPreview()` — top 3 + current user at rank 12
+- `getReferrals()` — 3 demo referrals
+
+### H+ Page (`hplus/page.tsx`)
+
+**Architecture: unified responsive** — single DOM tree, no dual-render. The old `hp-mobile-only` / `hp-desktop-only` split has been replaced with `hp-r-*` responsive CSS utility classes that adapt layout at `≥1024px`. Mobile and desktop see the same 8 sections, same data, same narrative — only grids and spacing adapt.
+
+**Responsive CSS utilities (`hp-r-*`)** — all defined in an inline `<style>` inside `HPlusPage`:
+
+| Class | Mobile | Desktop (≥1024px) |
+|---|---|---|
+| `hp-r-section-pad` | `padding: 40px 20px` | `padding: 72px 64px` |
+| `hp-r-hero-pad` | `padding: 36px 20px` | `padding: 48px 64px` |
+| `hp-r-inner` | full width | `max-width: 1440px; margin: 0 auto` |
+| `hp-r-hero-grid` | flex column | `1fr 300px` grid, `gap: 56px` |
+| `hp-r-65-35` | flex column | `65fr 35fr` grid |
+| `hp-r-70-30` | flex column | `70fr 30fr` grid |
+| `hp-r-50-50` | flex column | `1fr 1fr` grid |
+| `hp-r-4col` | `2×2` grid | `repeat(4,1fr)` grid |
+| `hp-r-3col` | flex column | `repeat(3,1fr)` grid |
+| `hp-r-2col` | `1fr 1fr` grid | `1fr 1fr` grid (wider gap) |
+| `hp-r-sticky` | no sticky | `position: sticky; top: 112px` |
+| `hp-r-desktop-only` | `display: none` | `display: block` |
+| `hp-r-mobile-only` | `display: block` | `display: none` |
+
+**Page structure:** `HPlusPage` (data assembly) → `HPlusPageContent` (back nav + section orchestrator) → 8 `Sec*` components.
+
+**Back nav placement:** The sticky "← Overview" bar (`position: sticky; top: 56px; height: 56px`) is rendered in `HPlusPageContent` as a sibling **before** `<SecHero>` — not inside the hero section. This matches the pattern used by Progress, Journey, and Community pages. `hp-r-sticky` uses `top: 112px` (56px global header + 56px back nav).
+
+**Live data from store** (via `useHPlusStore()`):
+- Hero score, streak, today points, month rank — all from `store.hplus`
+- Category breakdown — from `store.categories`
+- Today's timeline — `store.newActivities` (session-logged) prepended to `getDemoActivities()`
+- **Day analytics** — `buildLiveDayAnalytics()` (inline in `HPlusPage`) computes cumulative H+ curves from `activities` bucketed into 8 two-hour slots (6AM→8PM). 3 dynamic insight strings. Used when `analyticsPeriod === 'day'`.
+- **Calendar heatmap today cell** — overridden with live `todayPoints`, `todayBiomarkerPoints`, and `isPerfect`.
+
+**Static demo data** (from `hplus-demo-data.ts`): week/month analytics, historical calendar cells, achievements, leaderboard, referrals.
+
+**8 sections (`Sec*` components):**
+
+1. **`SecHero`** — Dark cinematic (`#071310 → #060f10`). Simplified to three elements only. `hp-r-hero-grid`: left = eyebrow pill ("H+ Transformation Score") + `<h1>` headline ("Every healthy choice / compounds.") + supporting copy; right = premium glassmorphic H+ score centerpiece (220px ring, `CircularScore` 200px, `AnimatedCounter`, "H+ Points" gradient label, rank label). Removed: achievement chips (streak / rank / perfect days / chapter), momentum strip, 7-dot streak tracker. Mobile: stacks left then right. Ring sized 220px on both breakpoints; score font `clamp(44px,6vw,60px)`. Back nav rendered as a sibling in `HPlusPageContent`, not inside this section.
+
+2. **`SecTodaysJourney`** — Surface `#FAFAF8`. `hp-r-65-35`: left = `DtActionPath` (completed group with success glow + H+ emphasis; pending group with hover-right affordance); right = `DtCommandCenter` (dark forest sticky card: 2×2 stats, perfect-day gold progress bar, streak, "Continue Today's Journey" CTA). Mobile: stacks action path above command center card.
+
+3. **`SecMomentum`** — Dark forest. `hp-r-4col` (2×2 on mobile → 4-col on desktop) momentum cards: Current Streak / Best Streak / Perfect Days / Consistency % — each with icon, large value, encouraging copy. Below: `DtConsistencyWall` calendar in glassmorphic container — gold perfect-day cells, warm green strong days, white day labels.
+
+4. **`SecAchievements`** — Warm stone `#F0EDE6`. `DtNextAchievementCard` (tier-coloured featured card, large progress bar, projected unlock). Below: **desktop** = 4-col `AchievementCard` grid (`hp-r-desktop-only`); **mobile** = horizontal swipe carousel of 220px cards (`hp-r-mobile-only`, `hp-scroll-hide`). Same achievements on both devices.
+
+5. **`SecAnalytics`** — White `#fff`. `hp-r-70-30`: left = `DtHeroChart` (SVG area chart with combined + activity lines, legend, summary stats, Day/Week/Month segmented control); right sticky = `DtInsightPanel` (4 coaching insight cards: strongest habit / biggest H+ source / growth edge / potential weekly gain). Mobile: hero chart full-width, insight panel stacks below.
+
+6. **`SecCategories`** — Sage `#EEF3EF`. **Desktop** (`hp-r-desktop-only`): `DtCategoryPerformance` 3-col priority groups (Already Strong / Growth Opportunities / Quick Wins). **Mobile** (`hp-r-mobile-only`): 2-col `RadialProgress` grid. Same categories on both.
+
+7. **`SecCommunity`** — Dark forest. `hp-r-50-50`: left = `DtFeaturedTransformation` (member story card — Rajesh K., quote, stats, achievement chips); right = `LeaderboardPreview` (dark variant). Mobile: stacks featured story above leaderboard.
+
+8. **`SecReferrals`** — Surface `#FAFAF8`. `DtReferralCelebration`: `hp-r-50-50` — left = celebration headline + social proof ("247 members joined") + gold "Share Your Journey" CTA; right = reward tier cards + active referrals list. Mobile: stacks left above right.
+
+**Key sub-components (shared):** `AnimatedCounter` (rAF count-up), `CircularScore` (SVG arc, gradient + glow), `RadialProgress` (per-category ring), `AchievementCard` (tier-aware, `TIER_COLORS`), `LeaderboardPreview` (light + dark variant via `dark` prop), `ReferralSection` (legacy mobile referral — still used in `MobileHPlus`-era referral section).
+
+**Desktop-only sub-components (also shown on mobile via responsive layout):** `DtActionPath`, `DtCommandCenter`, `DtConsistencyWall`, `DtNextAchievementCard`, `DtHeroChart`, `DtInsightPanel`, `DtCategoryPerformance`, `DtFeaturedTransformation`, `DtReferralCelebration`.
+
+**CSS class prefix:** `hp-*` + `hp-r-*`. Defined in an inline `<style>` inside `HPlusPage`. Section backgrounds follow VitalPath banding: dark cinematic → `#FAFAF8` → dark forest → `#F0EDE6` → `#fff` → `#EEF3EF` → dark forest → `#FAFAF8`.
+
+---
+
+## 14. Data & State Management
 
 All data is currently **hardcoded mock data** — there is no backend API or database connected. State lives in component-level `useState`.
 
@@ -871,22 +1154,37 @@ All data is currently **hardcoded mock data** — there is no backend API or dat
 - Programme progress: 33% (2 of 6 months)
 - Cohort size: 847 members on Month 2
 
-**Interactive state in today/page.tsx:**
+**Interactive state in today/page.tsx (`OverviewContent`):**
 - `habitsChecked` — toggles 5 daily habits
 - `showSetup` — dismiss the upload labs banner
 - `activeFilter` — Explore Health Topics pills
-- `goalChecked` (Month 2) — toggles 4 month goals
 - `photos` (Month 2) — stores uploaded progress photo URLs
+- `sheet` — controls which `ActionLoggingModal` is open and which step it's on (`LoggingSheet` discriminated union)
+- `logDate: string` — ISO date `'YYYY-MM-DD'`, shared across all logging flows via `ActivityDateTimeSelector`, defaults to today, resets on modal close
+- `logTime: string` — 24h `'HH:MM'`, shared across all logging flows, defaults to current time, resets on modal close
+- `storeSnap` — live snapshot from `useHPlusStore()`: `hplus`, `categories`, `loggedToday`, `newActivities`
+
+**H+ engine state** (shared via `lib/hplus-store.ts`, persists across navigation within the session):
+- `hplus.score` — cumulative H+ score (starts 428 in demo)
+- `hplus.todayPoints` / `todayMax` — today's progress toward 30 H+
+- `hplus.streak` — current daily streak
+- `categories[]` — per-category current/max counts (meals, exercise, water, sleep, sunlight, meditation, mood, biomarkers)
+- `loggedToday` — Set of ActivityCategory strings logged this session
+- `newActivities[]` — `LoggedActivity` entries created this session (prepended to demo timeline on H+ page)
 
 ---
 
-## 13. Routing
+## 15. Routing
 
 | Route | Component | Notes |
 |---|---|---|
 | `/` | `app/page.tsx` | Redirects → `/today` |
+| `/onboarding` | `onboarding/page.tsx` | **Post-signup onboarding flow.** Rendered outside the `(app)` shell — no global header, no FAB, full-screen dark luxury aesthetic. 5 screens: (1) Welcome hero (Unsplash lifestyle photo, cinematic overlay, gradient headline), (2) Your Information (name/DOB/gender/height/weight/waist), (3) Goals (up to 3 from 5 categories, 29 goals total), (4) Health Conditions (multi-select chips incl. "Other Health Condition" with text reveal, "None" deselects all others), (5) You're All Set (Unsplash forest path photo, goal summary, 6-month roadmap). State: `step`, `userInfo`, `selectedGoals`, `selectedConditions`, `otherCondition`. Transitions: pure opacity fade (no lateral slide). In-flow CTAs — no `position:fixed` buttons. Progress bar fixed at top. Back nav shown on steps 2–4 only. **"Begin Month 1" CTA navigates to `/today?tab=overview&state=pre_started`** — landing the new member in the Pre-Started Overview experience rather than directly into Month 1. |
+| `/overview` | `overview/page.tsx` | Programme overview / onboarding page. Demo toggle: `not_started` (8-section marketing/onboarding experience) vs `active` (ContinueJourneyBanner + redirect to `/today`). |
 | `/today` | `today/page.tsx` | **Primary landing page** and navigation hub |
-| `/today?tab=overview` | `OverviewContent` | Default |
+| `/hplus` | `hplus/page.tsx` | **H+ Points experience.** **Unified responsive** — single DOM tree, no dual-render. `hp-r-*` CSS utilities adapt layout at ≥1024px. Sticky "← Overview" back nav rendered in `HPlusPageContent` as a sibling before `SecHero` (not inside it). 8 `Sec*` sections: `SecHero` (headline + supporting copy + H+ score ring only — no chips or momentum strip), `SecTodaysJourney` (action path + command center), `SecMomentum` (4 momentum cards + consistency wall calendar), `SecAchievements` (next achievement card + desktop 4-col grid / mobile carousel), `SecAnalytics` (hero chart + insight panel), `SecCategories` (desktop priority groups / mobile 2-col grid), `SecCommunity` (featured story + leaderboard), `SecReferrals` (celebration layout). All data live from `useHPlusStore()` + demo fallbacks. Same narrative and information hierarchy on all devices. |
+| `/today?tab=overview` | `OverviewContent` | Default — renders in `active` state |
+| `/today?tab=overview&state=pre_started` | `OverviewContent` | **Pre-Started state** — transformation blueprint for enrolled members who haven't begun Month 1. Arrival point from onboarding completion. |
 | `/today?tab=month1` | `Month1Content` | |
 | `/today?tab=month2` | `Month2Content` | |
 | `/today?tab=month3` | `LockedMonthContent` monthNum=3 | |
@@ -896,6 +1194,8 @@ All data is currently **hardcoded mock data** — there is no backend API or dat
 | `/progress` | `progress/page.tsx` | **Secondary.** Reached via "View Your Progress" carousel card. Sticky "← Overview" back nav. |
 | `/community` | `community/page.tsx` | **Secondary.** Reached via "View All Stories" carousel card. Sticky "← Overview" back nav. |
 | `/journey` | `journey/page.tsx` | **Secondary.** Transformation documentary page — 9 sections including cinematic hero, transformation timeline, comparison slider, photo reel, journey roadmap. Reached via "View Your Complete Journey →" CTA in `TransformationJourney` component. Sticky "← Overview" back nav. |
+| `/daily-plan` | `daily-plan/page.tsx` | **Secondary.** Personalised Daily Meal & Exercise Plan — full-day transformation journey with cinematic hero, "Built Around You" profile cards, vertical timeline of 10 activities (hydration, movement, meals, recovery) each with a horizontal image-first carousel, Why This Supports Your Goal strip, weekly momentum section, **AI Disclaimer card**, dark forest closing. Reached via "View Full Meal Plan" CTA in `NutritionStrategyCard` Assigned Plan panel, and "Today's Meal & Exercise Plan" nav cards in Overview. Sticky "← Overview" back nav. `HAS_COACHING` constant defined at top of file (default `true`). |
+| `/nudges` | `nudges/page.tsx` | **Secondary.** Nudge Library — 388 nudges from `lib/nudges-normalized.json`. Browse by health goal filter pills (13 goals; Weight Loss + Reduce Blood Pressure pre-selected for Priya). Toggle nudges on/off. Edit schedule inline (time input + day checkboxes). Reached via "Daily Nudges" WorkflowCard in Health Programme section and "Your Daily Nudges" card in HealthConciergeModal. Sticky "← Overview" back nav. CSS prefix: `nudge-*`. |
 | `/today/compare` | `today/compare/page.tsx` | A/B prototype — IA comparison tool, not a production route |
 | `/habits` | `habits/page.tsx` | Redirects → `/today` |
 | `/meals` | `meals/page.tsx` | Redirects → `/today` |
@@ -904,15 +1204,24 @@ All data is currently **hardcoded mock data** — there is no backend API or dat
 
 **Navigation hierarchy:**
 ```
-/today  (primary hub)
-  ├── /progress    (← Overview to return)
-  ├── /community   (← Overview to return)
-  └── /journey     (← Overview to return)
+/onboarding
+  └── "Begin Month 1" → /today?tab=overview&state=pre_started
+
+/today?tab=overview&state=pre_started  (pre-started: transformation blueprint)
+  └── "Start Month 1" → /today?tab=month1
+
+/today  (primary hub, active member)
+  ├── /hplus        (← Overview to return — H+ Points experience)
+  ├── /progress     (← Overview to return)
+  ├── /community    (← Overview to return)
+  ├── /journey      (← Overview to return)
+  ├── /daily-plan   (← Overview to return)
+  └── /nudges       (← Overview to return)
 ```
 
 ---
 
-## 14. Programme Naming System
+## 16. Programme Naming System
 
 Every month has two names. Both must always be present in the UI.
 
@@ -932,7 +1241,7 @@ Discover · Build · Restore · Balance · Sustain · Thrive
 
 ---
 
-## 15. Visual Design Principles
+## 17. Visual Design Principles
 
 The UI has been elevated through several design passes. Current visual language:
 
@@ -958,7 +1267,7 @@ The UI has been elevated through several design passes. Current visual language:
 
 ---
 
-## 16. Development Commands
+## 18. Development Commands
 
 ```bash
 # From monorepo root
@@ -982,26 +1291,35 @@ cd apps/web && npm run build
 
 ---
 
-## 17. Known Constraints & Decisions
+## 19. Known Constraints & Decisions
 
 - **No backend yet** — All data is hardcoded. Member profile, habits, metrics are all mock values.
 - **Inline styles** — The web app primarily uses inline styles for component-level styling rather than Tailwind classes, for portability and specificity. Tailwind is used in `globals.css` for base resets.
 - **Today page is monolithic** — `today/page.tsx` contains all tab content as local functions. This is intentional for current phase — splitting into separate files is a future refactor.
 - **Mobile app is separate from web** — They share types and programme data via packages but are independently maintained. Mobile uses React Native components; web uses HTML/CSS.
 - **Stub routes** — `/habits`, `/meals`, `/steps`, `/sleep` redirect to `/today` as placeholders for future dedicated pages.
-- **No auth** — No login flow exists. App loads directly to `/today`.
+- **No auth** — No login flow exists. App loads directly to `/today`. The `/onboarding` page exists as a post-signup experience but is not gated — navigate to it directly at `/onboarding`.
+- **Onboarding is stateless** — Data collected in the 5-screen onboarding flow (name, DOB, goals, conditions) is not persisted anywhere. The flow completes by redirecting to `/today?tab=overview&state=pre_started`. Persistence requires a backend integration.
+- **Pre-started state is URL-driven** — `?state=pre_started` is read from `searchParams` on each render. There is no session or cookie storing it. The browser URL preserves it on refresh; navigating away loses it.
 - **Demo user only** — All content is for "Priya", Month 2, moderate risk. No multi-user support yet.
 - **No bottom navigation, no sidebar** — The mobile bottom nav and desktop sidebar have both been removed. The app is full-width at all screen sizes. `/today` is the primary entry point; Progress and Community are reached through contextual carousel nav cards and return via sticky "← Overview" headers.
-- **Nav card pattern** — Any new secondary experience should follow the same pattern: a dark forest gradient nav card (`#1C2B1E → #3A5C3E`) appended to the relevant carousel on the Overview page, and a sticky back header (`top: 56px`, `ChevronLeft` + "Overview") on the destination page.
+- **Nav card pattern** — Any new secondary experience should follow the same pattern: a dark forest gradient nav card (`#1C2B1E → #3A5C3E`) appended to the relevant carousel on the Overview page, and a sticky back header (`top: 56px`, `ChevronLeft` + "Overview") on the destination page. `/daily-plan` follows this pattern — nav cards in both the mobile Overview footer and the desktop Overview closing section CTA group.
+- **`/daily-plan` CSS prefix** — `dp-*`. Dual-render: `daily-mobile-only` / `daily-desktop-only`. All styles injected as inline `<style>` in `daily-plan/page.tsx`. Carousel component `RecommendationCarousel` uses `dp-rail-wrap` / `dp-rail`. Card types: `dp-rec-card` (hydration/movement/recovery), `dp-meal-card` (meals), `dp-snack-card`. All carousels are horizontal-scroll-only (`scroll-snap-type: x mandatory`) with no grid fallback. Image wrappers have `background: #e8ede9` placeholder colour to prevent white-flash on image load.
 - **Month naming** — Always use the member-friendly title as the dominant h2. Clinical phase name is always present but rendered small and muted. Never swap the hierarchy. See §13 Naming System.
 - **Demo toggle** — Month 1 has a "Demo View: Active / Completed" segmented control at the top. This is a prototype affordance and not production UI. Other months do not have this.
 - **Future month philosophy** — Months 3–6 are full-content preview experiences (not teasers). Mobile body content has `grayscale(40%) opacity: 0.85`. The unlock CTA and `MonthTransformationStory` are always full-colour and outside the grayscale filter. On desktop, each month has a unique per-month colour identity (`DT_PAL` record in `LockedMonthContent`) — Month 6 is full colour with no desaturation at any breakpoint.
-- **Concierge modal routes** — `/goals`, `/meal-plan`, `/meal-plan/coach`, `/progress/selfie`, `/progress/biomarkers`, `/coach/message`, `/ai-coach`, `/ask`, `/briefing`, `/briefing/subscribe` are placeholder routes not yet built. Implement those pages before making the modal CTAs functional.
-- **`HAS_COACHING` flag** — Hardcoded `true` at top of `(app)/layout.tsx`. Replace with real entitlement check (subscription tier, coaching plan status) before shipping.
+- **H+ store persistence** — `lib/hplus-store.ts` is a module-level singleton that survives client-side navigation. State is also written to `sessionStorage` (`key: 'hplus_session_state'`) on every `logActivity()` call and hydrated at module load, so it also survives full page reloads within the same browser session. The H+ pill in the header uses `<Link href="/hplus">` (Next.js client navigation) — not `<a href>` — so the singleton is never killed during normal in-app navigation. Phase 2: replace `logActivity()` with an API write and seed initial state from an API fetch on mount.
+- **H+ key naming duality** — The modal uses singular `ActivityCategory` keys (`meal`, `biomarker`). The store `CategoryProgress` and `HPlusCategoryKey` use plural keys (`meals`, `biomarkers`). The mapping lives in `hplus-store.ts → toStoreCatKey()` and also inline in `EarnTodayCarousel` dispatch/lookup. Any new category logging must handle both.
+- **H+ page Phase 2 plan** — **Day analytics** is now live (derived from `store.newActivities` + `getDemoActivities()`). **Calendar today cell** is live (overrides `getMonthCalendar()` output). Week/Month analytics charts, historical calendar cells, achievements, leaderboard, and referrals still use static demo data from `lib/hplus-demo-data.ts`. Replace each static function with an API call when the backend is ready.
+- **`EarnTodayCarousel` replaces "Your Tools"** — The old paginated `WorkflowCard` carousel (with `toolsPage`/`directionRef`/`yt-*` CSS) has been fully removed. `yt-carousel-outer`, `yt-carousel-track`, `yt-arrow-prev/next`, `yt-dots`, `yt-dot`, `yt-dot-active` CSS classes are no longer in use.
+- **Concierge modal routes** — `/goals`, `/meal-plan`, `/meal-plan/coach`, `/progress/selfie`, `/progress/biomarkers`, `/coach/message`, `/ai-coach`, `/ask`, `/briefing`, `/briefing/subscribe` are placeholder routes not yet built. Implement those pages before making the modal CTAs functional. `/nudges` and `/hplus` **are built** and functional.
+- **Nudge data** — `lib/nudges-normalized.json` (388 entries) is the source of truth for the Nudge Library. All nudge state (toggle on/off, custom schedules) is local `useState` — not persisted. `Nudge` type: `{ id, health_goal, habit, nudge_primary, nudge_followup, trigger_type: 'time'|'context'|'interval'|'user_set', schedule_time, recurrence, default_enabled, user_customizable_time }`. Priya's demo goals are pre-selected: `Weight Loss` + `Reduce Blood Pressure`.
+- **Nudge Library CSS** — All styles in `nudge-*` prefixed classes inside an inline `<style>` tag in `nudges/page.tsx`. Dual-render: `nudge-mobile-only` / `nudge-desktop-only` at 1024px+. No shared stylesheet entries needed.
+- **`HAS_COACHING` flag** — Hardcoded `true` at top of `(app)/layout.tsx` (governs HealthConciergeModal sections) and separately at top of `daily-plan/page.tsx` (governs `AiDisclaimer` CTA). Both default to `true`. Replace with real entitlement check before shipping.
 
 ---
 
-## 18. What Each Chatbot Prompt Should Include
+## 20. What Each Chatbot Prompt Should Include
 
 When asking an AI to modify this codebase, specify:
 
@@ -1015,7 +1333,7 @@ When asking an AI to modify this codebase, specify:
 
 ---
 
-## 19. Desktop Layout System (1024px+)
+## 21. Desktop Layout System (1024px+)
 
 The desktop experience is a completely separate DOM tree from mobile — **dual-render pattern**, not a wider single column.
 
@@ -1050,6 +1368,14 @@ The desktop experience is a completely separate DOM tree from mobile — **dual-
 | `mts-dt-workspace` / `mts-dt-left` / `mts-dt-right` | 70/30 grid + column styles | inline style in `MonthTransformationStory` |
 | `mts-dt-reel-grid` / `mts-dt-highlights-grid` | 5-col reel / 2×2 highlights grids | inline style in `MonthTransformationStory` |
 | `ns-*` | NutritionStrategyCard internals | inline style in `NutritionStrategyCard` |
+| `yt-*` | ~~Your Tools carousel~~ — **REMOVED.** Replaced by `EarnTodayCarousel`. These classes no longer exist in `OverviewContent`. | — |
+| `hp-*` | H+ page internals — section bands, segmented control, card lift, badge glow keyframe, breathing animations | inline style in `hplus/page.tsx` |
+| `hp-r-*` | H+ page **responsive layout utilities** — `hp-r-section-pad`, `hp-r-hero-grid`, `hp-r-65-35`, `hp-r-70-30`, `hp-r-50-50`, `hp-r-4col`, `hp-r-3col`, `hp-r-2col`, `hp-r-sticky`, `hp-r-desktop-only`, `hp-r-mobile-only`. Single breakpoint at 1024px. Replaces the old `hp-mobile-only`/`hp-desktop-only` dual-render split. | inline style in `hplus/page.tsx` |
+| `nudge-mobile-only` / `nudge-desktop-only` | Nudge Library visibility toggles | inline style in `nudges/page.tsx` |
+| `nudge-dt-*` | Nudge Library desktop internals — `nudge-dt-inner`, `nudge-dt-inner-pad`, `nudge-dt-2col` (2-col card grid) | inline style in `nudges/page.tsx` |
+| `nudge-pill-row` | Health goal filter pill scrollable row (both mobile and desktop) | inline style in `nudges/page.tsx` |
+| `nudge-card-lift` | Hover lift animation on nudge cards | inline style in `nudges/page.tsx` |
+| `nudge-sticky-header` | Sticky back nav (`top: 56px`, dark forest, backdrop blur) | inline style in `nudges/page.tsx` |
 | `dt-*` | Generic desktop utilities (legacy) | `globals.css` |
 
 ### Overview Desktop Layout (`ov-desktop-only`)
@@ -1066,21 +1392,24 @@ The desktop Overview is a self-contained full-width layout tree. Key classes:
 | `ov-dt-section-dark` | Dark forest band `#1A2B1C` — Health Command Center |
 | `ov-dt-section-white` | Pure white band `#ffffff` — Learn & Discover |
 | `ov-dt-section-stone` | Warm stone band `#F0EDE6` — Your Journey So Far |
-| `ov-dt-journey-workspace` | 65fr / 35fr — journey indicator left, today-at-a-glance right |
+| `ov-dt-journey-workspace` | `65fr / 35fr`, `grid-template-rows: auto auto`, `gap: 28px 32px` — 2-col × 2-row editorial grid |
+| `ov-dt-journey-left` | Left col, spans both rows (`grid-row: 1 / 3`). Flex column, `gap: 24px` — Chapter card then Your Patterns |
+| `ov-dt-journey-right-top` | Right col, row 1 — Your Habits card |
+| `ov-dt-journey-right-bottom` | Right col, row 2 — Health Snapshot card |
 | `ov-dt-story-workspace` | 70fr / 30fr |
-| `ov-dt-cmd-toolkit-full` | 6-col grid — all 6 toolkit cards in a single row |
+| `ov-dt-cmd-toolkit-full` | ~~6-col static grid~~ — replaced by `yt-carousel-track` (4-col, paginated) |
 | `ov-dt-stories-grid` | 3-col grid |
 | `ov-dt-articles` | 2-col grid |
 
 **Section 1 — Hero** (`ov-dt-hero`, 560px / 620px at 1400px+): Full-width cinematic — `ov-dt-hero-inner` is `display: flex` (not a grid). Single `ov-dt-hero-left` column, `max-width: 760px` (840px at 1400px+), `padding: 0 64px 60px 64px`. **Coach Presence card (Dr. Ananya) removed; `ov-dt-hero-right` zone and class removed.** Content stack bottom-up (`justify-content: flex-end`): chapter pill → **YOUR HEALTH GOAL glassmorphism capsule** (`background: rgba(8,18,10,0.52)`, `backdrop-filter: blur(16px)`, gold eyebrow, `memberGoals` icon-chips, impact microcopy) → greeting h1 60px/900 → day subtitle 17px → month progress bar (max-width 360px, sage→gold gradient). `memberGoals` constant defined at top of file after `TABS`.
 
-**Section 2 — Journey Experience** (`ov-dt-section`, default `#FAFAF8`): `ov-dt-journey-workspace` 65/35 grid. Left 65% — `JourneyIndicatorDesktop` (phase stepper + chapter card). Right 35% sticky — 2 cards: (1) **Today's Habits** — live interactive checklist using shared `habitsChecked` state, streak pill, progress footer showing `X of 5 done`; (2) **Health Snapshot** — 2×2 compact metric tiles (Steps / Weight / HbA1c / BP) with animated bars. **Your Patterns moved out of sticky column** — rendered as a full-width 2-col row directly below the `ov-dt-journey-workspace` grid inside the same band to eliminate whitespace gap. `TransformationJourney` component removed from this section.
+**Section 2 — Journey Experience** (`ov-dt-section`, default `#FAFAF8`): `ov-dt-journey-workspace` — 2-col × 2-row editorial grid (`65fr / 35fr`, `grid-template-rows: auto auto`). **Left column spans both rows** (`grid-row: 1/3`): `JourneyIndicatorDesktop` (phase stepper + reduced-height chapter card) stacked above **Your Patterns** (4-card 2×2 insight grid). **Right top** (`ov-dt-journey-right-top`): **Your Habits** — live interactive checklist using shared `habitsChecked` state, streak pill, progress footer `X of 5 done`. **Right bottom** (`ov-dt-journey-right-bottom`): **Health Snapshot** — dark forest gradient card (`#071710 → #163326`), 4 metrics as horizontal rows (icon + 22px coloured value + inline progress bar + sub-label), tinted `dimColor` row backgrounds for visual grouping. **Chapter card** reduced ~15–20%: hero `minHeight: 240px` (was 300px), padding `32px 36px 36px` (was 40px 40px 48px), icon 56px (was 68px), title 36px (was 44px), focus pills padding `18px 36px 22px` (was 22px 40px 28px). **Your Patterns** is now a 4-card 2×2 grid: Sleep · Streaks · Nutrition · Movement — each card has coloured `bg`/`border`, 24px emoji, 10px category eyebrow, 14px stat value, 13px headline, 12px insight copy. The `gap: 12px` grid and uniform `16px` card padding create natural height to balance the Health Snapshot card without artificial stretching.
 
 **Section 3 — My Transformation Story** (`ov-dt-section ov-dt-section-warm`, `#EEF3EF`): `ov-dt-story-workspace` 70/30 grid. Left 70% — cinematic header (48px headline, animated glows, stat chips) + large square photo reel + "Capture Today's Win" CTA + documentary CTA. Right 30% sticky — reflection journal card + Journey Highlights 2×2. **Future Self Preview + `NutritionStrategyCard` moved out of sticky column** — rendered as a side-by-side 2-col row directly below the `ov-dt-story-workspace` grid to eliminate whitespace gap. The Nutrition card uses `variant="default"` here. Uses separate `dtStoryPhotos`/`dtStoryActiveSlot`/`dtStoryRef` state.
 
 **Section 3b — Biomarker Progress Showcase** (dark `#08110A`, full-bleed): `BiomarkerProgressShowcase` wrapped in `<div className="ov-dt-bleed">` (negative margin breakout — same as `ov-dt-section` but no padding, since BPS manages its own). Renders premium desktop carousel — ~3.2 cards visible, all 6 biomarker metrics, wheel-to-scroll, final "Explore Your Complete Progress" card → `/progress`.
 
-**Section 4 — Health Command Center** (`ov-dt-section ov-dt-section-dark`, `#1A2B1C`): Full-width dark band. Section heading in white/sage. (1) **Today's Focus** — full-width 2-col card: left has goal headline (36px), progress bar, 3 inline actions (Log Steps, Log Activity, "View health report →" link to `/progress`); right has frosted step counter pill (56px gold number). (2) **Your Tools** — `ov-dt-cmd-toolkit-full` 6-col grid of toolkit cards rendered in dark glass style (semi-transparent backgrounds, white text).
+**Section 4 — Complete Today's Journey** (`ov-dt-section ov-dt-section-dark`, `#1A2B1C`): Full-width dark band. Section renamed from "Health Command Center" → **"Complete Today's Journey"**. Section header row: heading left + live H+ score pill + streak count right. (0) **Upload Labs banner** (conditional, `showSetup` state) — shown above Today's Focus when `showSetup === true`. Dark-surface-aware design: gold directional gradient background (`rgba(212,168,67,0.14→0.07)`), `border: 1px solid rgba(212,168,67,0.32)`, subtle radial highlight top-left behind text. 🧪 icon left. Heading `#F8FAF8` near-white 15px/800. Body text `rgba(196,218,200,0.80)` sage-tinted white. CTA "Upload Labs" styled as gold gradient button (`#D4A843 → #B07828`, `box-shadow` gold glow, hover lift). Dismiss is a `28px` circular ghost button. (1) **Today's Focus** — full-width 2-col card: left has goal headline (36px), progress bar, 3 inline actions (Log Steps, Log Activity, "View health report →" link to `/progress`); right has frosted step counter pill (56px gold number). (2) **Earn Today's H+** — `EarnTodayCarousel` component. Horizontal-scroll row of 9 cinematic cards (200×250px, no grid). H+ progress bar + "Today's Opportunities" chips above. Dark glass cards with full-bleed photography, status pills, H+ badges. On mobile (inside `ov-prog-inner-split` right column): same `EarnTodayCarousel`. The old "Your Tools" paginated carousel (`toolsPage`, `directionRef`, `yt-*` CSS classes) has been **removed** from the desktop. The old 2×3 `WorkflowCard` grid has been **replaced** with `EarnTodayCarousel` on mobile too.
 
 **Section 5 — Learn & Discover** (`ov-dt-section ov-dt-section-white`, `#ffffff`): Featured Story (full-width 50/50 dark card) + 2-col stories grid + large filter pills + 50/50 Questions/Articles grid.
 
@@ -1109,10 +1438,10 @@ The following elements were audited and removed to eliminate duplication:
 - **Centre hero panel** ("Journey Status" glassmorphism card) — removed. Was duplicating Day/Month/% data already shown in left zone.
 - **Momentum Strip** (`ov-dt-momentum`, 4 floating cards below hero) — removed. Was duplicating Streak/Consistency/Weight/Programme % shown in the Journey right panel.
 - **`TransformationJourney` component** in Journey left column — removed. Covered by the dedicated Story section below.
-- **Journey right companion panel** (4 cards: Current Chapter, Upcoming Milestone, Future Self, Journey CTA) — replaced with the 3 today-at-a-glance cards.
-- **Health Snapshot 2×2** from Command Center Row 1 — removed. Navigation to `/progress` preserved via "View health report →" ghost link inside Today's Focus card.
-- **Habits checklist** from Programme Studio in Command Center — removed. Habits live in Journey right panel.
-- **Personal Patterns 4 cards** from Command Center Row 2 — removed. 2 teasers live in Journey right panel.
+- **Journey right companion panel** (4 cards: Current Chapter, Upcoming Milestone, Future Self, Journey CTA) — replaced with `ov-dt-journey-right-top` (Your Habits) and `ov-dt-journey-right-bottom` (Health Snapshot). The old `ov-dt-journey-right` sticky wrapper class is removed.
+- **Health Snapshot 2×2** from Command Center Row 1 — removed and relocated to `ov-dt-journey-right-bottom` in Section 2 as a richer dark forest card.
+- **Habits checklist** from Programme Studio in Command Center — removed. Lives in `ov-dt-journey-right-top` (Your Habits card in Section 2).
+- **Personal Patterns 4 cards** from Command Center Row 2 — removed from Command Center. Relocated to `ov-dt-journey-left` as a 4-card 2×2 insight grid (Sleep · Streaks · Nutrition · Movement) stacked below the chapter card.
 - **`ov-dt-cmd-row1`**, **`ov-dt-cmd-row2`** CSS classes — removed (Command Center is now single-column with toolkit full-width).
 
 ### Month 1 Desktop Grids (`m1-dt-*` classes)
@@ -1184,6 +1513,122 @@ Injected as inline `<style>` in `community/page.tsx`. Breakpoint: `≥1024px`.
 | Act 3 Gallery | White `#ffffff` | `cm-3col` DesktopStoryCard grid |
 | Act 4 Finale | Dark gradient | Full-width centred, 52px headline, white CTA |
 
+### Daily Plan Page Layout (`dp-*` classes)
+
+Injected as inline `<style>` in `daily-plan/page.tsx`. Dual-render: `daily-mobile-only` / `daily-desktop-only`. Breakpoint: `≥1024px`.
+
+**Constants:** `HAS_COACHING = true` (top of file). `MEMBER` (name, day, goal, condition, preference, cuisine). `Sparkles` added to lucide imports.
+
+**Page sections (order):**
+
+| Section | Band | Content |
+|---|---|---|
+| Hero | Dark cinematic `#071710` | Content-height (no min-height) — eyebrow, h1 "Good Morning, Priya", plan subtitle, blueprint source, motivational quote card |
+| Built Around You | Warm `#FAF5EC` | 4 profile cards: Goal / Condition / Preference / Cuisine — each with icon, value, 1-line explanation |
+| Today's Journey | White `#ffffff` | Vertical timeline (`dp-timeline`, `::before` sage line) of 10 `TLEvent` cards — each with time, section title, supporting copy, carousel(s), optional Why strip, Mark Complete button |
+| Weekly Momentum | Sage `#EEF3EF` | 7 day pills (done/active/pending), animated adherence progress bar |
+| **AI Disclaimer** | **White `#ffffff`** | **`AiDisclaimer` component — `useInView`-gated fade-up card (y:20→0, 0.5s). `dp-ai-wrap` sets responsive top margin (48px mobile / 64px desktop). `dp-ai-card`: warm off-white `#FAFAF5`, sage border, 22/24px radius, subtle shadow, max-width 720px centred. Badge: "✨ AI Generated Nutrition Plan". Headline: "Want more personalised recommendations?". Body: AI disclaimer copy. CTA: `dp-ai-cta` sage gradient button (52px height, full-width ≤640px). CTA label/href gated by `HAS_COACHING`: `true` → "Connect with Your Coach" → `/coach/message`; `false` → "Learn About Coach Support" → `/today`.** |
+| Closing | Dark forest `#0a1a0e` | Emotional copy, 3 stat numbers, "Return to My Journey" CTA → `/today` |
+
+**Timeline events (10 total):**
+Morning Reset (07:00) → Movement Break (07:30) → Start Your Day Strong / Breakfast (09:15) → Midmorning Nourishment (11:30) → Fuel Your Afternoon / Lunch (13:00) → Post-Lunch Movement (14:00) → Energy Boost / Snack (16:30) → Evening Movement (18:00) → Finish Strong / Dinner (19:30) → Wind Down & Recover (21:00)
+
+**Carousel architecture (`RecommendationCarousel`):**
+- Every option group (meals, hydration, movement, recovery, snacks) renders a `RecommendationCarousel` — horizontal-scroll-only, `scroll-snap-type: x mandatory`, no grid fallback at any breakpoint
+- Desktop: `← →` arrow buttons top-right of each carousel (`.dp-rail-arrows`, hidden on mobile)
+- No edge-fade overlay (removed to prevent shimmer appearance)
+
+**Card types:**
+| Class | Width (mob/desk) | Image height (mob/desk) | Used for |
+|---|---|---|---|
+| `dp-rec-card` | 252px / 296px | 158px / 178px | Hydration, movement, recovery |
+| `dp-meal-card` | 262px / 308px | 170px / 192px | Breakfast, lunch, dinner |
+| `dp-snack-card` | 200px / 230px | 130px / 130px | Snacks |
+
+All image wrappers use `background: #e8ede9` as a loading placeholder. Cards support `.selected` class: sage border + glow shadow. Desktop hover: `translateY(-4px)`, image `scale(1.03)`.
+
+**Key CSS classes:**
+| Class | Purpose |
+|---|---|
+| `daily-mobile-only` / `daily-desktop-only` | Visibility toggles |
+| `dp-sticky-header` | Sticky back nav at `top: 56px`, dark forest |
+| `dp-inner` / `dp-inner-pad` | `max-width: 1600px`, padded container |
+| `dp-timeline` / `dp-tl-event` / `dp-tl-dot` | Vertical timeline with sage `::before` spine |
+| `dp-event-card` / `dp-event-body` / `dp-event-footer` | Timeline event card sections |
+| `dp-rail-wrap` / `dp-rail` | Carousel wrapper + scrollable rail |
+| `dp-rail-arrows` / `dp-arrow-btn` | Desktop arrow nav (hidden on mobile) |
+| `dp-rec-card` / `dp-rec-img-wrap` / `dp-rec-img` | Recommendation card + image |
+| `dp-meal-card` / `dp-meal-img-wrap` / `dp-meal-img` | Meal card + image |
+| `dp-snack-card` / `dp-snack-img-wrap` / `dp-snack-img` | Snack card + image |
+| `dp-card-body` | Shared card content padding |
+| `dp-img-badge` / `dp-img-tag` | Selection checkmark / food tag overlaid on image |
+| `dp-selected-pill` / `dp-choose-btn` | Selection state CTA |
+| `dp-complete-btn` | Mark Complete / Completed toggle |
+| `dp-why-strip` | "Why This Supports Your Goal" explanation block after main meals |
+| `dp-micro` | Micro-motivation quote revealed on completion |
+| `dp-week-pill` | Day adherence pill (done/active/pending) |
+| `dp-profile-grid` | 2-col (mobile) / 4-col (≥768px) profile cards |
+| `dp-section-darkforest` | Closing section gradient |
+| `dp-eyebrow` / `dp-eyebrow-light` | Eyebrow label styles (dark / light bg variant) |
+| `dp-benefit` | Benefit tag chip inside cards |
+| `dp-ai-wrap` | AI Disclaimer outer spacing — `padding-top: 48px` mobile / `64px` desktop |
+| `dp-ai-card` | Disclaimer card — warm off-white `#FAFAF5`, sage border 1.5px, `border-radius: 22/24px`, centred, max-width 720px |
+| `dp-ai-badge` | "✨ AI Generated Nutrition Plan" pill badge — sage tinted, uppercase 10px |
+| `dp-ai-cta` | Primary CTA button — sage gradient, 52px height, full-width on mobile ≤640px, auto on desktop |
+
 ---
 
-*Last updated: June 16, 2026 | VitalPath v2.8 | 6-month preventive health coaching platform | today/page.tsx ~8000 lines*
+*Last updated: June 19, 2026 | VitalPath v5.6 | 6-month preventive health coaching platform*
+
+*Changes since v5.5 (June 19, 2026):*
+- **H+ page unified responsive architecture** — Removed dual-render (`hp-mobile-only`/`hp-desktop-only`). `MobileHPlus` and `DesktopHPlus` functions replaced with a single `HPlusPageContent` orchestrator calling 8 `Sec*` section components (`SecHero`, `SecTodaysJourney`, `SecMomentum`, `SecAchievements`, `SecAnalytics`, `SecCategories`, `SecCommunity`, `SecReferrals`). New `hp-r-*` CSS utility classes handle all layout adaptation at `≥1024px`. Mobile and desktop now share identical narrative, information hierarchy, and data — only grids/spacing adapt.
+- **Achievement Gallery** — Desktop: 4-col grid. Mobile: horizontal swipe carousel (220px cards, `hp-scroll-hide`). Same achievements on both.
+- **Category Performance** — Desktop: `DtCategoryPerformance` 3-col priority groups. Mobile: 2-col `RadialProgress` grid. Same categories on both.
+- **`LeaderboardPreview`** — Added `dark?: boolean` prop for use inside dark-band community section without duplicating markup.
+- **Dead code removed** — `MobileTimeline`, `DesktopTimeline`, `TodaySummaryCard`, `MobileAnalytics`, `DesktopAnalytics`, `CalendarHeatmap` (≈435 lines) deleted. All superseded by `Sec*`/`Dt*` components.
+- *hplus/page.tsx ~1860 lines*
+
+*Changes since v5.4 (June 19, 2026):*
+- **Exercise `duration` step** — Replaced 6-card grid with a premium glassmorphism duration selector (80px number, vertical drag, `−`/`+` 64px circular buttons with long-press acceleration at 500ms delay + 120ms repeat). Quick-select preset strip kept below as shortcuts — clicking a preset syncs the selector and advances the step. Encouragement copy keyed to time ranges (<15/15–30/30–60/60+). Bug fixed: old `onPointerDown`+`onPointerUp` double-fire producing ×3 increments replaced with `onClick`-only increment + delayed long-press. State: `exerciseDuration`, `longPressRef`, `dragStartY/Val`.
+- **Water `pick` step** — Removed 6-card static grid. Replaced with premium hydration counter: large glass count, `−`/`+` 60px circular buttons, animated 💧×10 progress row, live ml conversion, motivational message keyed to glass count. State: `waterGlasses`.
+- **Sleep flow** — Merged `bedtime` + `waketime` into a single step (`bedtime`). Both time pickers are `<motion.button>` cards that call `input.showPicker()` (with `focus()`/`click()` fallback) on hidden off-screen `<input type="time">` refs (`bedtimeInputRef`, `waketimeInputRef`). Live "Estimated Sleep" card calculates and animates duration and quality message. Step count reduced from 5 → 4 (quality is now 2/4, interruptions 3/4, sunlight-prompt 4/4). Back-nav map updated.
+- **Sunlight `pick` step** — Removed 4-card duration grid. Replaced with: (1) benefit reinforcement card with live minute count + "Supports Energy / Sleep Quality / Circadian Rhythm"; (2) premium duration selector identical to Exercise (breathing amber glow orb, 80px value, 64px `−`/`+` buttons, coaching message). State: `sunlightMinutes`, `sunlightLongPressRef`.
+- **Meditation flow — full redesign.** `pick` step replaced with a mindfulness check-in (2 premium choice cards). Two paths: **Path A** (I Already Meditated) → `log-duration` (premium selector + direct log). **Path B** (I'd Like To Meditate Now) → `feeling` (5 emotional state cards) → `session-prep` (recommendation card keyed to feeling + duration selector + "▶ Begin Session") → `active` (full-screen live timer with breathing circle animation, countdown, rotating gentle prompts, Pause/End controls) → `post-feeling` (5 emoji reflection) → `success` (mood-shift arrow, duration, +4 H+). `LoggingSheet` type union expanded with `log-duration`, `feeling`, `session-prep`, `active`, `post-feeling` steps plus `feeling?`, `postFeeling?`, `sessionType?` fields. State: `meditationMinutes`, `meditationSecsLeft`, `meditationPaused`, `meditationPromptIdx`, `breathPhase`, `meditationTimerRef`, `meditationBreathRef`, `meditationLongPressRef`.
+- **Biomarker hub — redesigned.** `pick` step: removed 2×2 image card grid + "What are you measuring?" heading. Replaced with full-width stacked progress cards — each shows last reading as headline value, trend badge (↓ delta / range label), last-updated age, staggered entrance animation. Tap anywhere on a card opens that metric.
+- **Biomarker value inputs — all replaced with ± selectors.** `bioNumVal` state (default 700, weight stored ×10 for one decimal) + `bioNum2Val` (default 800, BP diastolic) replace free-text `<input type="number">`. Shared `makeLongPress()` factory + per-field `bioLPRef`/`bioLP2Ref` refs. `MetricSelector` inner component renders the glassmorphism selector with breathing radial glow.
+- **Blood pressure — collapsed from 3 steps to 1.** `bp-systolic` + `bp-diastolic` + `bp-context` steps removed. New `bp-entry` step: large live "SYS / DIA" preview, two side-by-side panels (SYSTOLIC / DIASTOLIC each with ± buttons), live coloured interpretation badge (Normal Range / Slightly Elevated / Above Normal / High), single "Save →" CTA.
+- **Weight step** — Added "Last Reading" + "Change" context cards (live diff from 70.4 kg baseline). Encouragement copy keyed to direction of change. ± selector at 70.4 kg default.
+- **Waist step** — Added "Last Reading" + "Change" context cards (diff from 90 cm baseline). Measurement tip card ("just above the navel, exhale gently"). Encouragement copy keyed to direction of change.
+- **All biomarker success screens** — replaced generic `SuccessScreen` with a custom per-metric layout: large reading headline, trend badge, story copy, animated ✓ +2 H+ pill, Done CTA.
+- **Glucose value step** — Premium ± selector (default 94 mg/dL) with live interpretation message (Normal / Slightly elevated / Above target).
+- *today/page.tsx ~10,500+ lines*
+
+*Changes since v5.2:*
+- *`ActivityDateTimeSelector` — new universal date/time component replacing the old Today/Yesterday chip pattern. Two glassmorphism pill selectors: date (native `<input type="date" max={todayISO}>`, displays "Today"/"Yesterday"/formatted date) + time (native `<input type="time">`, displays 12h formatted). Placed below `StepIndicator` on every step of every flow. `logDate` state changed from `'today'|'yesterday'|'custom'` → ISO string `'YYYY-MM-DD'`. `logTime` changed from display string → 24h `'HH:MM'`. Users can now retrospectively log any past date.*
+- *All KPI/dashboard metrics removed from inside logging flows — removed "X meals logged", meal targets, workout counts, hydration goals, streak counts, sleep goals from `InsightBar` pills. Logging experiences now contain only action-completion elements.*
+- *`LastLoggedBar` added selectively where historical context is genuinely useful: Sleep step 1 (orientation hint about logging for previous night), Biomarker picker (last reading value + date).*
+- *Modal width increased from `max-width: 540px` → `max-width: 760px`.*
+
+*Changes since v5.1:*
+- *All remaining logging flows (Exercise, Water, Sleep, Sunlight, Meditation, Mood, Biomarkers) redesigned to match Meal flow quality — each now has a 180px `HeroImageBand` on every step, `StepIndicator`, `ActivityDateTimeSelector`, and tailored `SuccessScreen` with `details` pill cards.*
+- *`StepIndicator` — single shared component (segmented bar + `current/total` label, per-flow accent colour). Replaces bespoke `ExStepBar`/`SleepStepBar`/`MoodStepBar` inline components.*
+- *`SuccessScreen` — unified with `details` prop showing specific logged data (activity/duration/intensity for exercise; hours/quality/sunlight for sleep; glucose value/context for biomarkers; mood + influences for mood).*
+- *Unified modal header — back arrow (‹) for mid-flow steps computed from `backMap`, × close on entry steps and always visible mid-flow as secondary. Activity label + live H+ remaining cap pill. Replaces old "H+ score + +2 available" header.*
+- *Exercise expanded to 4 steps: pick → duration (6 options incl. 90min) → intensity (4 levels with colour bars) → reflection (4 feeling cards, submit button required).*
+- *Sleep expanded to 5 steps: bedtime → waketime (live duration calc) → quality → interruptions → sunlight-prompt.*
+- *Mood expanded to 3 steps: pick (6 emotions) → influences (multi-select chips) → reflection (contextual journal prompt).*
+- *Biomarkers expanded to metric-specific paths: Glucose (context → value), BP (systolic → diastolic → context), Weight (value → timing), Waist (value). All with step-appropriate heroes.*
+- *Portion step now requires explicit chip selection — no silent 100% default.*
+- *today/page.tsx ~10,000+ lines*
+
+*Changes since v5.0:*
+- *`ActionLoggingModal` meal flow completely redesigned — coaching-grade 7-step nutrition adherence capture. New steps: `slot-select` → `plan-meal` → `adherence` → `adherence-changes` (conditional) → `components` → `portion` → `success`. Scoring: `exact`/`mostly` = +2, `changes`/`custom` = +1. `MealSuccessScreen` shows slot, meal name, date/time, adherence badge, coaching insight. Auto-closes after 3.2s.*
+- *New supporting data: `TODAYS_MEAL_PLAN` (badge, tags[], img), `MEAL_HISTORY` (20 entries), `MEAL_SLOTS` (5 configs), `ADHERENCE_POINTS`, `ADHERENCE_MESSAGES`.*
+
+*Changes since v4.0:*
+- *`DailyOperationsSection` — new reusable component inserted on all 6 monthly tabs immediately after `MonthTransformationStory`. Desktop: 70/30 `dos-dt-*` grid — `EarnTodayCarousel` in dark forest left panel + Mission Status card (SVG ring, checklist) + Streak card on right. Mobile: header → Mission Status → Streak → carousel. `#EEF3EF` sage band background.*
+- *`lib/hplus-store.ts` — added `sessionStorage` persistence (`key: 'hplus_session_state'`). State survives full page reloads. Every `logActivity()` call serialises to sessionStorage via `persistState()`.*
+- *H+ page `hplus/page.tsx` — Day analytics tab is now live: `buildLiveDayAnalytics()` computes cumulative curves from the real activity log, generates dynamic insight strings. Calendar today cell overridden with live `todayPoints`. H+ pill changed from `<a>` to Next.js `<Link>` to preserve store singleton across navigation.*
+- *`HPlusPill` visual refresh — light surface pill (sage/gold tint bg, `rgba(107,143,113,0.28)` border, score in warm amber `#8A6B1A`) replaces dark forest background. Sits naturally on the white header.*
+- *Daily Nudges card in `HealthConciergeModal` — CTA moved from bottom-right (`alignSelf: flex-end`, `marginTop: auto`) to left-aligned inside content column (`alignSelf: flex-start`, `marginTop: 20px`). Fixed `height: 200px` and `overflow: hidden` removed — card height is now auto with `padding-bottom: 24px`.*
+- *today/page.tsx ~9200+ lines | hplus/page.tsx ~1850+ lines*

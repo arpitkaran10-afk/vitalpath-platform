@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
+import { useHPlusStore } from '../../lib/hplus-store';
 import {
   Settings,
   MessageCircle,
@@ -15,10 +17,65 @@ import {
   BookOpen,
   ArrowRight,
   Mail,
+  Bell,
+  Zap,
 } from 'lucide-react';
 
 // Replace with real entitlement check — true = user has a TGHC coaching plan
 const HAS_COACHING = true;
+
+// ── H+ Score Pill ─────────────────────────────────────────────────────────────
+
+function HPlusPill() {
+  const { hplus } = useHPlusStore();
+  const DEMO_SCORE = hplus.score;
+
+  return (
+    <Link href="/hplus" style={{ textDecoration: 'none' }}>
+      <motion.div
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scale: 0.96 }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '5px 12px 5px 6px',
+          background: 'linear-gradient(135deg, rgba(107,143,113,0.10) 0%, rgba(212,168,67,0.10) 100%)',
+          border: '1.5px solid rgba(107,143,113,0.28)',
+          borderRadius: '20px',
+          cursor: 'pointer',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Badge */}
+        <div style={{
+          width: '22px',
+          height: '22px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #6B8F71 0%, #A8C5AC 50%, #D4A843 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          boxShadow: '0 1px 6px rgba(107,143,113,0.30)',
+        }}>
+          <Zap size={11} color="#fff" strokeWidth={2.5} fill="#fff" />
+        </div>
+        {/* Score */}
+        <span style={{
+          fontSize: '13px',
+          fontWeight: 800,
+          color: '#8A6B1A',
+          letterSpacing: '-0.01em',
+          whiteSpace: 'nowrap',
+        }}>
+          {DEMO_SCORE} H+
+        </span>
+      </motion.div>
+    </Link>
+  );
+}
 
 function HealthConciergeModal() {
   const [open, setOpen] = useState(false);
@@ -701,6 +758,95 @@ function HealthConciergeModal() {
     </a>
   );
 
+  /*
+   * ── Section table ────────────────────────────────────────────────────────
+   * Mobile order   Desktop placement
+   * 1  storyCard   LEFT  — full-width cinematic card
+   * 2  goalsCard   LEFT  — 65/35 grid, left cell
+   * 3  progressHub LEFT  — 65/35 grid, right cell
+   * 4  briefingCard LEFT — full-width below grid
+   * 5  nudgesCard  RIGHT — below ASK ME ANYTHING       ← NEW
+   * 6  mealCard    RIGHT
+   * 7  supportCard RIGHT
+   * askCard lives at the top of the RIGHT column (no mobile section number)
+   * ─────────────────────────────────────────────────────────────────────────
+   */
+
+  const nudgesCard = (desktop = false) => (
+    <a href="/nudges" onClick={() => setOpen(false)} style={{ textDecoration: 'none', display: 'block' }}>
+      <motion.div
+        whileHover={desktop ? { y: -2 } : undefined}
+        whileTap={{ scale: 0.985 }}
+        style={{
+          background: 'linear-gradient(148deg, #0a0a1a 0%, #0c0f1a 40%, #0a0f0a 100%)',
+          borderRadius: '18px',
+          padding: desktop ? '22px 22px 24px' : '22px 20px',
+          border: '1px solid rgba(107,143,113,0.18)',
+          display: 'flex',
+          flexDirection: desktop ? 'column' : 'row',
+          alignItems: desktop ? 'flex-start' : 'center',
+          gap: '12px',
+          cursor: 'pointer',
+          position: 'relative',
+        }}
+      >
+        {/* Aurora glows */}
+        <div style={{
+          position: 'absolute', top: '-30px', right: '-20px',
+          width: '130px', height: '130px', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(107,143,113,0.18) 0%, transparent 65%)',
+          pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '-20px', left: '-10px',
+          width: '90px', height: '90px', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(100,80,190,0.12) 0%, transparent 65%)',
+          pointerEvents: 'none',
+        }} />
+
+        <div style={{
+          width: desktop ? '52px' : '50px', height: desktop ? '52px' : '50px',
+          borderRadius: desktop ? '15px' : '14px', flexShrink: 0,
+          background: 'rgba(107,143,113,0.18)', border: '1px solid rgba(107,143,113,0.26)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Bell size={desktop ? 22 : 20} color="rgba(160,205,168,0.92)" strokeWidth={1.7} />
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <p style={{
+            fontSize: '10px', fontWeight: 700, color: 'rgba(160,205,168,0.55)',
+            letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: '3px',
+          }}>
+            Your Daily Nudges
+          </p>
+          <p style={{
+            fontSize: '15px', fontWeight: 800, color: '#fff',
+            letterSpacing: '-0.01em', marginBottom: desktop ? '6px' : '3px', lineHeight: 1.2,
+          }}>
+            Smart reminders, your way
+          </p>
+          <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.42)', lineHeight: 1.4 }}>
+            {hasCoaching
+              ? '3 nudges synced with Dr. Ananya'
+              : 'Set up your nudge schedule'}
+          </p>
+          <div style={{
+            padding: desktop ? '10px 16px' : '9px 15px',
+            background: 'rgba(107,143,113,0.22)', border: '1px solid rgba(107,143,113,0.30)',
+            color: 'rgba(170,215,175,0.95)',
+            borderRadius: '10px', fontSize: '12px', fontWeight: 700,
+            whiteSpace: 'nowrap' as const,
+            alignSelf: 'flex-start',
+            marginTop: desktop ? '20px' : '10px',
+          }}>
+            Configure Nudges
+          </div>
+        </div>
+      </motion.div>
+    </a>
+  );
+
   /* ── desktop modal header ── */
   const desktopHeader = (
     <div style={{
@@ -793,6 +939,7 @@ function HealthConciergeModal() {
           {goalsCard(false)}
           {mealCard(false)}
           {progressHub(false)}
+          {nudgesCard(false)}
           {supportCard(false)}
           {askCard(false)}
           {briefingCard(false)}
@@ -893,6 +1040,7 @@ function HealthConciergeModal() {
                 display: 'flex', flexDirection: 'column', gap: '12px',
               }}>
                 {askCard(true)}
+                {nudgesCard(true)}
                 {mealCard(true)}
                 {supportCard(true)}
               </div>
@@ -1010,6 +1158,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             }} />
             Complete Profile (2/3)
           </button>
+
+          {/* H+ Score Pill */}
+          <HPlusPill />
+
           <button style={{
             width: '36px',
             height: '36px',
