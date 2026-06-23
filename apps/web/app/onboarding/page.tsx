@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Check, ChevronLeft } from 'lucide-react';
+import { ArrowRight, Check, ChevronLeft, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 interface UserInfo {
   fullName: string;
@@ -22,6 +22,7 @@ interface OnboardingState {
   step: Step;
   userInfo: UserInfo;
   selectedGoals: string[];
+  supportStyle: 'coach' | 'self_guided' | null;
   selectedConditions: string[];
   otherCondition: string;
 }
@@ -89,7 +90,7 @@ function AmbientGlow({ variant = 'forest' }: { variant?: 'forest' | 'amber' }) {
 }
 
 function ProgressBar({ step }: { step: Step }) {
-  const pct = ((step - 1) / 4) * 100;
+  const pct = ((step - 1) / 5) * 100;
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, height: '3px', background: 'rgba(255,255,255,0.08)' }}>
       <motion.div
@@ -113,7 +114,7 @@ function StepHeader({ step, onBack }: { step: Step; onBack: () => void }) {
         </button>
       </div>
       <div style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.05em' }}>
-        Step {step} of 4
+        Step {step} of 5
       </div>
     </div>
   );
@@ -188,71 +189,81 @@ function Screen1({ onNext }: { onNext: () => void }) {
       <div style={{
         position: 'relative', zIndex: 10,
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '72px 36px 0',
-        maxWidth: '640px', width: '100%', textAlign: 'center',
+        padding: '0 32px',
+        maxWidth: '560px', width: '100%', textAlign: 'center',
       }}>
-        {/* Warm amber eyebrow — complements sunrise palette */}
+        {/* Eyebrow */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.55, duration: 0.9, ease: [0.25, 0.1, 0.25, 1] }}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: '8px',
-            background: 'rgba(210,162,60,0.13)', border: '1px solid rgba(210,162,60,0.24)',
-            borderRadius: '20px', padding: '7px 16px', marginBottom: '28px',
+            background: 'rgba(212,168,67,0.10)', border: '1px solid rgba(212,168,67,0.20)',
+            borderRadius: '20px', padding: '6px 14px', marginBottom: '36px',
           }}
         >
-          <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#D4A843', opacity: 0.88 }} />
-          <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(212,168,67,0.84)', letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>
+          <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#D4A843', opacity: 0.80 }} />
+          <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(212,168,67,0.78)', letterSpacing: '0.12em', textTransform: 'uppercase' as const }}>
             Your 6-Month Transformation
           </span>
         </motion.div>
 
         {/* Headline */}
         <motion.h1
-          initial={{ opacity: 0, y: 22 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.72, duration: 0.9, ease: [0.25, 0.1, 0.25, 1] }}
           style={{
-            fontSize: 'clamp(40px, 7vw, 76px)',
-            fontWeight: 900, color: '#fff',
-            letterSpacing: '-0.03em', lineHeight: 1.0,
-            marginBottom: '22px',
-            textShadow: '0 2px 20px rgba(0,0,0,0.30)',
+            fontSize: 'clamp(38px, 6.4vw, 72px)',
+            fontWeight: 700,
+            color: '#fff',
+            letterSpacing: '-0.035em',
+            lineHeight: 1.06,
+            marginBottom: '28px',
+            textShadow: '0 2px 40px rgba(0,0,0,0.55)',
+            textAlign: 'center',
           }}
         >
-          Your health<br />
-          <span style={{
+          <span style={{ display: 'block', whiteSpace: 'nowrap' }}>
+            Your health{' '}
+            <span style={{
+              background: 'linear-gradient(135deg, #C8D8C0 0%, #8AB590 42%, #D4A843 100%)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            }}>transformation</span>
+          </span>
+          <span style={{ display: 'block' }}>starts <span style={{
             background: 'linear-gradient(135deg, #C8D8C0 0%, #8AB590 42%, #D4A843 100%)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>
-            transformation
-          </span>
-          <br />starts today.
+          }}>today.</span></span>
         </motion.h1>
 
         {/* Supporting copy */}
         <motion.p
-          initial={{ opacity: 0, y: 18 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.88, duration: 0.85, ease: [0.25, 0.1, 0.25, 1] }}
+          transition={{ delay: 0.90, duration: 0.85, ease: [0.25, 0.1, 0.25, 1] }}
           style={{
-            fontSize: 'clamp(15px, 2.5vw, 18px)',
-            color: 'rgba(255,248,225,0.58)',
-            lineHeight: 1.72, maxWidth: '400px',
-            marginBottom: '48px',
-            textShadow: '0 1px 8px rgba(0,0,0,0.28)',
+            fontSize: 'clamp(14px, 1.8vw, 16px)',
+            color: 'rgba(255,248,235,0.62)',
+            lineHeight: 1.80,
+            marginBottom: '52px',
+            textAlign: 'center',
+            textShadow: '0 1px 16px rgba(0,0,0,0.60)',
+            fontWeight: 400,
+            letterSpacing: '0.01em',
           }}
         >
-          Over the next 6 months, we'll help you build healthier habits, improve your biomarkers, and create lasting change.
+          <span style={{ display: 'block' }}>Over the next 6 months, we'll help you build healthier habits,</span>
+          <span style={{ display: 'block' }}>improve your biomarkers, and create lasting change.</span>
         </motion.p>
 
         {/* CTA */}
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.04, duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
-          style={{ width: '100%', maxWidth: '380px', paddingBottom: '56px' }}
+          transition={{ delay: 1.08, duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+          style={{ width: '100%', maxWidth: '360px', paddingBottom: '56px' }}
         >
           <motion.button
             onClick={onNext}
@@ -486,9 +497,218 @@ function Screen3({ selected, onToggle, onNext }: {
   );
 }
 
-// ── Screen 4 — Conditions ─────────────────────────────────────────────────────
+// ── Screen 4 — Support Style ──────────────────────────────────────────────────
 
-function Screen4({ selected, otherCondition, onToggle, onOtherChange, onNext }: {
+function Screen4({ selected, onSelect, onNext }: {
+  selected: 'coach' | 'self_guided' | null;
+  onSelect: (v: 'coach' | 'self_guided') => void;
+  onNext: () => void;
+}) {
+  const CARDS = [
+    {
+      id: 'coach' as const,
+      icon: '👩‍⚕️',
+      title: 'Work with a TGHC Coach',
+      description: 'Receive personalised guidance, accountability, and support from a dedicated health coach throughout your transformation journey.',
+      bullets: [
+        'Personalised health guidance',
+        'Regular progress reviews',
+        'Habit accountability support',
+        'Expert answers to your questions',
+        'Ongoing motivation and encouragement',
+      ],
+      footer: "Ideal if you'd like expert support along the way.",
+    },
+    {
+      id: 'self_guided' as const,
+      icon: '🌱',
+      title: 'Self-Guided with TGHC Tools',
+      description: 'Follow the programme independently using TGHC\'s tools, trackers, educational content, nudges, and DIY health plans.',
+      bullets: [
+        'Full programme access',
+        'DIY meal and lifestyle plans',
+        'Progress tracking and insights',
+        'Habit reminders and nudges',
+        'Learn and move at your own pace',
+      ],
+      footer: 'Ideal if you enjoy managing your own journey.',
+    },
+  ];
+
+  return (
+    <div style={{ minHeight: '100vh', position: 'relative', background: 'linear-gradient(160deg, #090c09 0%, #0d110a 50%, #090c09 100%)' }}>
+      <AmbientGlow variant="forest" />
+      <div style={{ position: 'relative', zIndex: 10, maxWidth: '960px', margin: '0 auto', padding: '96px 24px 0' }}>
+
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+          style={{ marginBottom: '44px' }}
+        >
+          <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(175,205,180,0.58)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '11px' }}>
+            Your Support System
+          </p>
+          <h2 style={{ fontSize: 'clamp(26px, 5vw, 44px)', fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.08, marginBottom: '13px' }}>
+            How would you like to be<br />supported on your journey?
+          </h2>
+          <p style={{ fontSize: '15px', color: 'rgba(255,248,225,0.44)', lineHeight: 1.68, maxWidth: '560px' }}>
+            Choose the level of guidance that feels right for you. Whether you prefer expert coaching or a more independent approach, you'll still receive the complete VitalPath transformation experience.
+          </p>
+        </motion.div>
+
+        {/* Cards */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: '20px',
+          marginBottom: '28px',
+        }}>
+          {CARDS.map((card, i) => {
+            const isSelected = selected === card.id;
+            return (
+              <motion.div
+                key={card.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.12 + 0.10 * i, duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+                onClick={() => onSelect(card.id)}
+                whileHover={{ y: -3 }}
+                whileTap={{ scale: 0.985 }}
+                style={{
+                  position: 'relative',
+                  background: isSelected
+                    ? 'linear-gradient(148deg, rgba(122,158,130,0.16) 0%, rgba(74,110,80,0.10) 100%)'
+                    : 'rgba(255,250,238,0.04)',
+                  border: isSelected
+                    ? '1.5px solid rgba(122,158,130,0.70)'
+                    : '1.5px solid rgba(255,248,225,0.09)',
+                  borderRadius: '24px',
+                  padding: '32px 30px 28px',
+                  cursor: 'pointer',
+                  transition: 'background 0.22s ease, border-color 0.22s ease',
+                  boxShadow: isSelected
+                    ? '0 0 40px rgba(107,143,113,0.18), 0 8px 32px rgba(0,0,0,0.22)'
+                    : '0 4px 20px rgba(0,0,0,0.16)',
+                }}
+              >
+                {/* Checkmark */}
+                <AnimatePresence>
+                  {isSelected && (
+                    <motion.div
+                      key="check"
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+                      style={{
+                        position: 'absolute', top: '20px', right: '20px',
+                        width: '26px', height: '26px', borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #7A9E82, #4A6E50)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 0 12px rgba(107,143,113,0.50)',
+                      }}
+                    >
+                      <Check size={13} color="#fff" strokeWidth={3} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Icon */}
+                <div style={{ fontSize: '40px', marginBottom: '20px', lineHeight: 1 }}>{card.icon}</div>
+
+                {/* Title */}
+                <h3 style={{
+                  fontSize: '20px', fontWeight: 800, color: '#fff',
+                  letterSpacing: '-0.02em', lineHeight: 1.2, marginBottom: '12px',
+                }}>
+                  {card.title}
+                </h3>
+
+                {/* Description */}
+                <p style={{
+                  fontSize: '14px', color: 'rgba(255,248,225,0.54)',
+                  lineHeight: 1.70, marginBottom: '24px',
+                }}>
+                  {card.description}
+                </p>
+
+                {/* Bullets */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' }}>
+                  {card.bullets.map(b => (
+                    <div key={b} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <div style={{
+                        width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0, marginTop: '1px',
+                        background: isSelected ? 'rgba(122,158,130,0.28)' : 'rgba(255,248,225,0.07)',
+                        border: isSelected ? '1px solid rgba(122,158,130,0.45)' : '1px solid rgba(255,248,225,0.10)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.22s ease',
+                      }}>
+                        <Check size={9} color={isSelected ? '#B8D0BB' : 'rgba(255,248,225,0.28)'} strokeWidth={3} />
+                      </div>
+                      <span style={{ fontSize: '13px', color: 'rgba(255,248,225,0.64)', lineHeight: 1.55 }}>{b}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer label */}
+                <div style={{
+                  borderTop: '1px solid rgba(255,248,225,0.07)',
+                  paddingTop: '18px',
+                }}>
+                  <p style={{
+                    fontSize: '12px', color: isSelected ? 'rgba(184,208,187,0.72)' : 'rgba(255,248,225,0.32)',
+                    lineHeight: 1.55, fontStyle: 'normal', transition: 'color 0.22s ease',
+                  }}>
+                    {card.footer}
+                  </p>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Reassurance panel */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.38, duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: '14px',
+            background: 'rgba(255,250,238,0.03)',
+            border: '1px solid rgba(255,248,225,0.07)',
+            borderRadius: '16px',
+            padding: '18px 22px',
+            marginBottom: '8px',
+          }}
+        >
+          <div style={{
+            width: '32px', height: '32px', borderRadius: '10px', flexShrink: 0,
+            background: 'rgba(212,168,67,0.10)', border: '1px solid rgba(212,168,67,0.18)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Sparkles size={15} color="rgba(212,168,67,0.75)" strokeWidth={1.8} />
+          </div>
+          <div>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: 'rgba(255,248,225,0.72)', marginBottom: '4px', letterSpacing: '-0.01em' }}>
+              Both options include the complete 6-month VitalPath programme.
+            </p>
+            <p style={{ fontSize: '13px', color: 'rgba(255,248,225,0.38)', lineHeight: 1.60 }}>
+              Your choice simply determines how much support you'd like along the way.
+            </p>
+          </div>
+        </motion.div>
+
+        <CtaButton label="Continue" onClick={onNext} disabled={selected === null} />
+      </div>
+    </div>
+  );
+}
+
+// ── Screen 5 — Conditions ─────────────────────────────────────────────────────
+
+function Screen5({ selected, otherCondition, onToggle, onOtherChange, onNext }: {
   selected: string[];
   otherCondition: string;
   onToggle: (c: string) => void;
@@ -584,9 +804,9 @@ function Screen4({ selected, otherCondition, onToggle, onOtherChange, onNext }: 
   );
 }
 
-// ── Screen 5 — You're All Set ─────────────────────────────────────────────────
+// ── Screen 6 — You're All Set ─────────────────────────────────────────────────
 
-function Screen5({ goals, onBegin }: { goals: string[]; onBegin: () => void }) {
+function Screen6({ goals, onBegin }: { goals: string[]; onBegin: () => void }) {
   return (
     <div style={{ minHeight: '100vh', position: 'relative', background: '#050c07' }}>
 
@@ -775,7 +995,7 @@ const INITIAL_USER_INFO: UserInfo = { fullName: '', dob: '', gender: '', height:
 export default function OnboardingPage() {
   const router = useRouter();
   const [state, setState] = useState<OnboardingState>({
-    step: 1, userInfo: INITIAL_USER_INFO, selectedGoals: [], selectedConditions: [], otherCondition: '',
+    step: 1, userInfo: INITIAL_USER_INFO, selectedGoals: [], supportStyle: null, selectedConditions: [], otherCondition: '',
   });
 
   function goTo(step: Step) {
@@ -809,7 +1029,7 @@ export default function OnboardingPage() {
     <div style={{ minHeight: '100vh', background: '#060b07' }}>
       <ProgressBar step={state.step} />
 
-      {state.step > 1 && state.step < 5 && (
+      {state.step > 1 && state.step < 6 && (
         <StepHeader step={state.step} onBack={() => goTo((state.step - 1) as Step)} />
       )}
 
@@ -839,15 +1059,22 @@ export default function OnboardingPage() {
           )}
           {state.step === 4 && (
             <Screen4
-              selected={state.selectedConditions}
-              otherCondition={state.otherCondition}
-              onToggle={toggleCondition}
-              onOtherChange={v => setState(s => ({ ...s, otherCondition: v }))}
+              selected={state.supportStyle}
+              onSelect={v => setState(s => ({ ...s, supportStyle: v }))}
               onNext={() => goTo(5)}
             />
           )}
           {state.step === 5 && (
             <Screen5
+              selected={state.selectedConditions}
+              otherCondition={state.otherCondition}
+              onToggle={toggleCondition}
+              onOtherChange={v => setState(s => ({ ...s, otherCondition: v }))}
+              onNext={() => goTo(6)}
+            />
+          )}
+          {state.step === 6 && (
+            <Screen6
               goals={state.selectedGoals}
               onBegin={() => router.push('/today?tab=overview&state=pre_started')}
             />
